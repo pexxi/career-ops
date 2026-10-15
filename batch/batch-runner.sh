@@ -1326,6 +1326,34 @@ process_offer() {
     fi
   fi
 
+  # Fork: zero-token pre-check gate (batch/prescreen.mjs, untracked fork helper).
+  # Location scope + tech-stack fit against config/profile.yml, run only on a
+  # fully prefetched JD (static fetch or ATS API above). Verdict on stdout:
+  # "PASS" | "SKIP: {reason}". Fail-open: a missing helper, a thin JD or any
+  # ambiguity passes through to the worker; every skip is recorded in
+  # batch-state.tsv ("skipped") and logs/discard.log.
+  local jd_words=0
+  if [[ -s "$jd_file" ]]; then
+    jd_words=$(wc -w < "$jd_file" 2>/dev/null) || jd_words=0
+    jd_words="${jd_words//[^0-9]/}"
+    jd_words="${jd_words:-0}"
+  fi
+  if [[ -f "$BATCH_DIR/prescreen.mjs" ]] && (( jd_words >= prefetch_min_words )); then
+    local prescreen_verdict prescreen_reason pc_completed_at
+    prescreen_verdict="$(node "$BATCH_DIR/prescreen.mjs" "$jd_file" "$PROFILE_FILE" 2>/dev/null || true)"
+    if [[ "$prescreen_verdict" == SKIP:* ]]; then
+      prescreen_reason="${prescreen_verdict#SKIP:}"
+      prescreen_reason="${prescreen_reason#"${prescreen_reason%%[![:space:]]*}"}"
+      pc_completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      update_state_retrying "$id" "$url" "skipped" "$started_at" "$pc_completed_at" "-" "-" "pre-check: $prescreen_reason" "$retries" || true
+      log_discard "$id" "$url" "$prescreen_reason"
+      release_report_num "$report_num"
+      rm -f "$jd_file"
+      echo "    ⏭️  Skipped by pre-check: $prescreen_reason"
+      return 0
+    fi
+  fi
+
   echo "--- Processing offer #$id${JOB_POS:+ ($JOB_POS)}: $url (report $report_num, attempt $((retries + 1)))"
 
   if [[ "$jd_thin_skip" == "1" ]]; then
