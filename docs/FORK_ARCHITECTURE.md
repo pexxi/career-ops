@@ -34,7 +34,7 @@ git push --force-with-lease origin feat/local-fork
 
 When a rebase conflict is large, re-implement the feature from its description
 below rather than forcing the old code in. That is how this fork was rebuilt on
-2026-10-15. The pre-rebuild history is kept in the tag `archive/pre-hq-sync-2026-10-15`.
+2026-10-15.
 
 ### Keeping fork code out of upstream's way
 
