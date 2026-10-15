@@ -1,0 +1,12 @@
+# Files this fork owns that upstream career-ops does not ship.
+# update-system.mjs apply never writes to these; see config/local-paths.example.txt.
+#
+# Fork files inside upstream directories (tests/, dashboard/, providers/) cannot
+# be listed here (the loader refuses them); they are left alone by the updater
+# as long as upstream never ships a file with the same name:
+#   providers/google-careers.mjs, tests/providers/google-careers.test.mjs,
+#   tests/set-status-bulk.test.mjs, dashboard/internal/data/status_bulk*.go,
+#   dashboard/internal/ui/screens/pipeline_bulk*.go
+
+# Bulk status writer (web bulk bar + dashboard multi-select)
+set-status-bulk.mjs
