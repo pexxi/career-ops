@@ -64,6 +64,10 @@ func isFalseCityState(city, state string) bool {
 		(s == "ID" && (strings.EqualFold(c, "req") || strings.EqualFold(c, "job"))) {
 		return true
 	}
+	// Fork: "Remote DE" / "Hybrid NY" are work-mode + region, not a US city/state pair.
+	if s != "" && (c == "remote" || c == "hybrid" || c == "onsite" || c == "on-site" || c == "full") {
+		return true
+	}
 	return false
 }
 

@@ -205,6 +205,7 @@ func ParseApplications(careerOpsPath string) ([]model.CareerApplication, error) 
 
 	lines := strings.Split(string(content), "\n")
 	apps := make([]model.CareerApplication, 0)
+	var locFromColumn []bool // fork: see location_fork.go
 	num := 0
 
 	// Map columns by header name rather than fixed position, so a customized or
@@ -284,6 +285,7 @@ func ParseApplications(careerOpsPath string) ([]model.CareerApplication, error) 
 		app.Notes = at("notes")
 
 		// Lift location / work mode / pay / last-contact out of the notes free-text
+		locFromColumn = append(locFromColumn, app.Location != "")
 		deriveNoteFields(&app)
 
 		apps = append(apps, app)
@@ -348,6 +350,8 @@ func ParseApplications(careerOpsPath string) ([]model.CareerApplication, error) 
 
 	// Strategy 5: company name fallback from batch-input.tsv
 	enrichAppURLsByCompany(inputPath, apps)
+
+	preferScanHistoryLocations(careerOpsPath, apps, locFromColumn)
 
 	return apps, nil
 }
