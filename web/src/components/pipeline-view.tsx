@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { CompanyLogo } from "@/components/company-logo";
 import { CANONICAL_STATES, canonStatus, scoreNum, scoreTone } from "@/lib/format";
 import { StatusSelect } from "@/components/status-select";
-import { applicationKey, applySavedStatus, saveStatuses } from "@/lib/pipeline-status.mjs";
+import { applicationKey, applySavedStatus } from "@/lib/pipeline-status.mjs";
+import { BULK_EXCLUDED, bulkNeedsReason, isBulkSelectable, rangeKeys, saveStatusesBulk } from "@/lib/pipeline-status-bulk.mjs";
 import { InboxTriage } from "@/components/inbox/inbox-triage";
 import { cn } from "@/lib/cn";
 import { companyPresentation, companySearchText } from "@/lib/company-presentation.mjs";
@@ -49,6 +50,11 @@ export function PipelineView({
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkError, setBulkError] = useState("");
+  // Fork bulk extras (pipeline-status-bulk.mjs): required reason for
+  // Discarded/SKIP, shift-click ranges, a short success notice.
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkNotice, setBulkNotice] = useState("");
+  const lastToggled = useRef<string | null>(null);
   const activeTab = useRef<HTMLButtonElement>(null);
 
   // The URL is the SINGLE source of truth for tab/min/sort/dir, so the home stat
@@ -131,17 +137,25 @@ export function PipelineView({
     ) as Application[];
   }, [visibleApplications, tab, deferredQ, sort, minFilter]);
 
-  const filteredKeys = filtered.map(applicationKey);
+  const filteredKeys = filtered.filter((r) => isBulkSelectable(r.n)).map(applicationKey);
   const selectedRows = filtered.filter((r) => selected.has(applicationKey(r)));
   const allSelected = filteredKeys.length > 0 && filteredKeys.every((k) => selected.has(k));
 
-  function toggleRow(key: string) {
+  function toggleRow(key: string, shift = false) {
+    const range = shift ? rangeKeys(filteredKeys, lastToggled.current, key) : [];
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
+      if (range.length > 0) {
+        const on = !prev.has(key);
+        for (const k of range) {
+          if (on) next.add(k);
+          else next.delete(k);
+        }
+      } else if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+    lastToggled.current = key;
   }
 
   function downloadCsv() {
@@ -153,17 +167,54 @@ export function PipelineView({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  // Escape clears the selection, unless focus is in a text field or select.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape" || selected.size === 0) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      setSelected(new Set());
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected.size]);
+
+  useEffect(() => {
+    if (!bulkNotice) return;
+    const t = setTimeout(() => setBulkNotice(""), 4000);
+    return () => clearTimeout(t);
+  }, [bulkNotice]);
+
+  // One request for the whole selection; set-status-bulk.mjs writes all rows or
+  // none. On a rejected batch the failed rows are deselected, so Apply again
+  // saves the rest.
   async function applyBulkStatus() {
+    const reason = bulkReason.trim();
     if (!bulkStatus || selectedRows.length === 0 || bulkBusy) return;
+    if (bulkNeedsReason(bulkStatus) && !reason) return;
     setBulkBusy(true);
     setBulkError("");
-    const { saved, failed } = await saveStatuses(selectedRows, bulkStatus);
+    const result = await saveStatusesBulk(selectedRows.map((r) => r.n), bulkStatus, reason).catch((e) => ({
+      ok: false as const,
+      failed: [] as { n: string; error: string }[],
+      error: e instanceof Error ? e.message : String(e),
+    }));
     setBulkBusy(false);
-    setSelected(new Set(selectedRows.filter((r) => failed.some((f) => f.n === r.n)).map(applicationKey)));
-    if (failed.length > 0) {
-      setBulkError(`${failed.length} not saved: ${failed.map((f) => `#${f.n} (${f.error})`).join(", ")}`);
+    if (!result.ok) {
+      if (result.failed.length > 0) {
+        const bad = new Set(result.failed.map((f) => f.n));
+        setSelected(new Set(selectedRows.filter((r) => !bad.has(r.n)).map(applicationKey)));
+        setBulkError(`${result.error}. Those rows were deselected; Apply again to save the rest.`);
+      } else {
+        setBulkError(result.error);
+      }
+      return;
     }
-    setAnnouncement(`${saved.length} application${saved.length === 1 ? "" : "s"} set to ${bulkStatus}.`);
+    setSelected(new Set());
+    setBulkReason("");
+    const summary = `${result.changed} changed, ${result.unchanged} unchanged → ${bulkStatus}`;
+    setBulkNotice(summary);
+    setAnnouncement(summary);
     startTransition(() => router.refresh());
   }
 
@@ -251,8 +302,10 @@ export function PipelineView({
         </div>
       )}
 
+      {bulkNotice && <p className="mt-3 text-xs text-muted">{bulkNotice}</p>}
+
       {visibleTab !== "INBOX" && selectedRows.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/60 px-3 py-2 text-sm">
+        <div className="sticky top-2 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/95 px-3 py-2 text-sm shadow-sm backdrop-blur">
           <span className="tabular-nums">{selectedRows.length} selected</span>
           <select
             aria-label="Status for selected applications"
@@ -262,14 +315,24 @@ export function PipelineView({
             className="rounded-md border border-border bg-surface px-2 py-1 text-sm"
           >
             <option value="">Set status…</option>
-            {CANONICAL_STATES.map((s) => (
+            {CANONICAL_STATES.filter((s) => !BULK_EXCLUDED.has(s)).map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          {bulkNeedsReason(bulkStatus) && (
+            <input
+              aria-label="Reason (required)"
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+              placeholder="Reason (required)"
+              disabled={bulkBusy}
+              className="w-48 rounded-md border border-border bg-surface px-2 py-1 text-sm"
+            />
+          )}
           <button
             type="button"
             onClick={applyBulkStatus}
-            disabled={!bulkStatus || bulkBusy}
+            disabled={!bulkStatus || bulkBusy || (bulkNeedsReason(bulkStatus) && !bulkReason.trim())}
             className="rounded-md border border-brand/40 bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand disabled:opacity-50"
           >
             {bulkBusy ? "Saving…" : "Apply"}
@@ -362,7 +425,8 @@ export function PipelineView({
                         type="checkbox"
                         aria-label={`Select ${company.label}, ${r.role} (#${r.n})`}
                         checked={selected.has(key)}
-                        onChange={() => toggleRow(key)}
+                        disabled={!isBulkSelectable(r.n)}
+                        onChange={(e) => toggleRow(key, (e.nativeEvent as MouseEvent).shiftKey === true)}
                       />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums">

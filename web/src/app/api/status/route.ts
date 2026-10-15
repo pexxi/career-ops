@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import { rootScript } from "@/lib/career-ops";
-import { runSetStatus } from "@/lib/core-cli";
+import { runSetStatus, runCoreCli } from "@/lib/core-cli";
 import { canonicalizeStatus } from "@/lib/core/states";
 import { parseCliJson, trackerRowArg, clientErrorMessage } from "@/lib/status-cli.mjs";
 import { readJsonObject } from "@/lib/json-body";
+import { parseBulkRequest, bulkStatusArgs, bulkHttpStatus } from "@/lib/status-bulk.mjs";
 
 export const runtime = "nodejs"; // delegates to the core CLI via child_process
 
@@ -50,8 +51,10 @@ const CLIENT_ERROR_CODES = new Set(["usage", "invalid-state", "undo-unknown-prio
 // the document from the end rather than from the first `{`.
 
 export async function POST(req: Request) {
-  const body = await readJsonObject<{ n?: string; status?: string; undo?: boolean }>(req);
+  const body = await readJsonObject<{ n?: string; ns?: unknown; status?: string; reason?: unknown; undo?: boolean }>(req);
   if (!body) return Response.json({ error: "bad json" }, { status: 400 });
+  // Fork: several rows at once go to set-status-bulk.mjs (see status-bulk.mjs).
+  if (body.ns !== undefined) return bulkPost(body);
   const { n, status } = body;
   // {n, undo: true} takes back the row's last logged change (set-status.mjs
   // --undo). The CLI picks the status to restore, so there is none to check.
@@ -171,4 +174,44 @@ async function writeStatus(n: unknown, canon: string | null) {
     changed: parsed.changed === true,
     statusLogged: parsed.statusLogged === true,
   });
+}
+
+// ── Fork: bulk rows ─────────────────────────────────────────────────────────
+// One set-status-bulk.mjs run for the whole selection: one lock, one atomic
+// write, all or nothing. The CLI's JSON document goes back verbatim, so the
+// client reads per-row `outcomes` (changed / unchanged / notFound / ambiguous).
+async function bulkPost(body: { n?: unknown; ns?: unknown; status?: unknown; reason?: unknown }) {
+  const request = parseBulkRequest(body, canonicalizeStatus);
+  if (!request.ok) {
+    return Response.json({ error: request.error, ...(request.code ? { code: request.code } : {}) }, { status: 400 });
+  }
+  if (!fs.existsSync(rootScript("set-status-bulk"))) {
+    return Response.json(
+      { error: "bulk status updates need set-status-bulk.mjs in the career-ops checkout", code: "core-script-missing" },
+      { status: 503 },
+    );
+  }
+  const { code, stdout, stderr, spawnFailed, timedOut } = await runCoreCli("set-status-bulk", bulkStatusArgs(request));
+  if (spawnFailed) {
+    console.error(`/api/status: set-status-bulk.mjs failed to run: ${stderr.trim()}`);
+    return Response.json({ error: "status update failed to run" }, { status: 500 });
+  }
+  if (timedOut) {
+    return Response.json(
+      { error: "status update timed out; the change may or may not have been applied" },
+      { status: 504, headers: { "Retry-After": "5" } },
+    );
+  }
+  const parsed = parseCliJson(stdout);
+  if (!parsed) {
+    if (stderr.trim()) console.error(`/api/status: set-status-bulk.mjs exited ${code} without JSON: ${stderr.trim()}`);
+    return Response.json({ error: "status update returned no result" }, { status: 500 });
+  }
+  const cliCode = typeof parsed.code === "string" ? parsed.code : undefined;
+  const httpStatus = bulkHttpStatus(code, cliCode);
+  if (httpStatus >= 500 && stderr.trim()) console.error(`/api/status: set-status-bulk.mjs exited ${code}: ${stderr.trim()}`);
+  return Response.json(
+    httpStatus === 200 || code === 5 ? parsed : { error: clientErrorMessage(parsed, stderr), ...(cliCode ? { code: cliCode } : {}) },
+    { status: httpStatus, ...(httpStatus === 503 ? { headers: { "Retry-After": "5" } } : {}) },
+  );
 }
