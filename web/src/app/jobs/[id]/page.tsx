@@ -16,7 +16,7 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
 
   if (!job) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-6 py-10">
         <Link href="/pipeline" className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-brand">
           <ArrowLeft className="size-4" /> Pipeline
         </Link>
@@ -28,7 +28,7 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <Link href="/pipeline" className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-brand">
         <ArrowLeft className="size-4" /> Pipeline
       </Link>

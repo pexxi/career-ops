@@ -17,7 +17,7 @@ export default function JobsHistory() {
   const { jobs, clearFinished } = useJobs();
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
+    <div className="mx-auto max-w-6xl px-6 py-10">
       <div className="flex items-end justify-between">
         <div>
           <h1 className="font-display text-2xl tracking-tight text-landing">Workers</h1>
