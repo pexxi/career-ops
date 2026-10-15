@@ -285,6 +285,9 @@ func getStatusPairs(currentNormalized string) []StatusPair {
 // application is currently selected in the main list, so the picker reflects
 // that row's own status rather than always assuming "Evaluated".
 func (m PipelineModel) currentStatusPairs() []StatusPair {
+	if m.bulkRows != nil {
+		return bulkStatusPairs()
+	}
 	if app, ok := m.CurrentApp(); ok {
 		return getStatusPairs(data.NormalizeStatus(app.Status))
 	}
@@ -311,6 +314,10 @@ type PipelineModel struct {
 	// Status picker sub-state
 	statusPicker bool
 	statusCursor int
+	// Bulk selection (fork, see pipeline_bulk.go): selected tracker #s, and the
+	// rows the open status/discard picker acts on (nil = single-row mode).
+	selected map[int]bool
+	bulkRows []int
 	// Discard reason picker sub-state (Issue 1380) — opens when status
 	// transitions to Discarded or SKIP, pre-populated from the report's
 	// predicted discard_reasons, plus canonical fallback options.
@@ -443,6 +450,8 @@ func (m PipelineModel) WithReloadedData(apps []model.CareerApplication, metrics 
 	reloaded.discardPendingApp = m.discardPendingApp
 	reloaded.discardPendingStatus = m.discardPendingStatus
 	reloaded.discardPredictedCount = m.discardPredictedCount
+	reloaded.selected = m.selected
+	reloaded.bulkRows = m.bulkRows
 	reloaded.applyFilterAndSort()
 	reloaded.CopyReportCache(&m)
 
@@ -520,6 +529,8 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	case PipelineOpenFailedMsg:
 		m.flash = "Could not open " + msg.Target + ": " + msg.Err
 		return m, nil
+	case PipelineBulkStatusDoneMsg:
+		return m.acceptBulkStatusDone(msg), nil
 	case StatusUpdateFailedMsg:
 		m.flash = "Could not update status: " + msg.Err
 	case PipelineHistoryFailedMsg:
@@ -564,9 +575,13 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		// While a search is committed, Esc clears the search (matches vim's `:nohl`
-		// ergonomics). With no query, Esc is a no-op — q is the only quit key, which
-		// keeps the help bar honest and avoids accidental exits.
+		// A bulk selection is cleared first, then a committed search (matches
+		// vim's `:nohl` ergonomics). With neither, Esc is a no-op — q is the only
+		// quit key, which keeps the help bar honest and avoids accidental exits.
+		if len(m.selected) > 0 {
+			m.selected = nil
+			return m, nil
+		}
 		if m.searchQuery != "" {
 			m.searchQuery = ""
 			m.applyFilterAndSort()
@@ -575,6 +590,12 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 			return m, m.loadCurrentReport()
 		}
 		return m, nil
+
+	case " ":
+		return m.toggleSelected(), nil
+
+	case "A":
+		return m.toggleAllVisible(), nil
 
 	case "q":
 		return m, func() tea.Msg { return PipelineClosedMsg{} }
@@ -733,6 +754,9 @@ func (m PipelineModel) handleKey(msg tea.KeyMsg) (PipelineModel, tea.Cmd) {
 		return m, nil
 
 	case "c":
+		if len(m.selected) > 0 {
+			return m.openBulkStatusPicker()
+		}
 		if len(m.filtered) > 0 {
 			m.statusPicker = true
 			m.statusCursor = 0
@@ -844,6 +868,7 @@ func (m PipelineModel) handleStatusPicker(msg tea.KeyMsg) (PipelineModel, tea.Cm
 	switch msg.String() {
 	case "esc", "q":
 		m.statusPicker = false
+		m.bulkRows = nil
 		return m, nil
 
 	case "down", "j":
@@ -860,6 +885,9 @@ func (m PipelineModel) handleStatusPicker(msg tea.KeyMsg) (PipelineModel, tea.Cm
 
 	case "enter":
 		m.statusPicker = false
+		if m.bulkRows != nil {
+			return m.commitBulkStatus(m.currentStatusPairs()[m.statusCursor].Canonical)
+		}
 		if app, ok := m.CurrentApp(); ok {
 			newStatus := m.currentStatusPairs()[m.statusCursor].Canonical
 			norm := data.NormalizeStatus(newStatus)
@@ -969,6 +997,9 @@ func (m PipelineModel) handleDiscardPicker(msg tea.KeyMsg) (PipelineModel, tea.C
 	case "esc":
 		// Skip reason tagging — still commit the status change.
 		m.discardPicker = false
+		if m.bulkRows != nil {
+			return m.emitBulkStatus(m.discardPendingStatus, "")
+		}
 		return m, func() tea.Msg {
 			return PipelineUpdateStatusMsg{
 				CareerOpsPath: m.careerOpsPath,
@@ -1083,6 +1114,9 @@ func (m PipelineModel) commitDiscardReason(reason string) (PipelineModel, tea.Cm
 		prefix = "SKIP"
 	}
 	notesTag := fmt.Sprintf("%s: %s", prefix, reason)
+	if m.bulkRows != nil {
+		return m.emitBulkStatus(newStatus, notesTag)
+	}
 	return m, func() tea.Msg {
 		return PipelineUpdateStatusAndNotesMsg{
 			CareerOpsPath: m.careerOpsPath,
@@ -1871,6 +1905,9 @@ func (m PipelineModel) renderAppLine(app model.CareerApplication, selected bool)
 	numText := "#—"
 	if app.Number > 0 {
 		numText = fmt.Sprintf("#%d", app.Number)
+		if m.selected[app.Number] {
+			numText = fmt.Sprintf("✓%d", app.Number) // bulk selection marker
+		}
 	}
 	numStyle := lipgloss.NewStyle().Foreground(m.theme.Blue).Bold(true).Width(cw.num)
 
@@ -2126,6 +2163,10 @@ func (m PipelineModel) renderHelp() string {
 			keyStyle.Render("↑↓/jk") + descStyle.Render(i18n.Current.HelpNavigate) +
 				keyStyle.Render("SPACE") + descStyle.Render(i18n.Current.HelpToggle) +
 				keyStyle.Render("Esc/C") + descStyle.Render(i18n.Current.HelpClose))
+	}
+
+	if len(m.selected) > 0 && !m.statusPicker && !m.discardPicker {
+		return style.Render(descStyle.Render(m.selectionHelp()))
 	}
 
 	if m.statusPicker || m.pdfPicker {

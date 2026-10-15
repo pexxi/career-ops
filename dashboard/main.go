@@ -157,6 +157,15 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case screens.PipelineBulkStatusMsg:
+		// Fork: one set-status-bulk.mjs call for the multi-select (pipeline_bulk.go).
+		result, err := data.UpdateApplicationStatusBulk(msg.CareerOpsPath, msg.Rows, msg.NewStatus, msg.Note)
+		m.reloadPipelineData()
+		m.pipeline, _ = m.pipeline.Update(screens.PipelineBulkStatusDoneMsg{
+			Summary: result.Summary(msg.NewStatus), Err: err, Applied: result.Applied,
+		})
+		return m, nil
+
 	case screens.PipelineRefreshMsg:
 		m.reloadPipelineData()
 		return m, nil
