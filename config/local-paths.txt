@@ -10,3 +10,6 @@
 
 # Bulk status writer (web bulk bar + dashboard multi-select)
 set-status-bulk.mjs
+
+# Zero-token batch prescreen gate called by batch/batch-runner.sh
+batch-prescreen.mjs

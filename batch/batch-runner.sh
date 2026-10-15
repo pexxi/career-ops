@@ -1325,8 +1325,7 @@ process_offer() {
       [[ -n "$jd_thin_note" ]] || jd_thin_note="no usable JD text (--thin-action $THIN_ACTION) — needs-playwright"
     fi
   fi
-
-  # Fork: zero-token pre-check gate (batch/prescreen.mjs, untracked fork helper).
+  # Fork: zero-token pre-check gate (batch-prescreen.mjs at the repo root).
   # Location scope + tech-stack fit against config/profile.yml, run only on a
   # fully prefetched JD (static fetch or ATS API above). Verdict on stdout:
   # "PASS" | "SKIP: {reason}". Fail-open: a missing helper, a thin JD or any
@@ -1338,9 +1337,9 @@ process_offer() {
     jd_words="${jd_words//[^0-9]/}"
     jd_words="${jd_words:-0}"
   fi
-  if [[ -f "$BATCH_DIR/prescreen.mjs" ]] && (( jd_words >= prefetch_min_words )); then
+  if [[ -f "$PROJECT_DIR/batch-prescreen.mjs" ]] && (( jd_words >= prefetch_min_words )); then
     local prescreen_verdict prescreen_reason pc_completed_at
-    prescreen_verdict="$(node "$BATCH_DIR/prescreen.mjs" "$jd_file" "$PROFILE_FILE" 2>/dev/null || true)"
+    prescreen_verdict="$(node "$PROJECT_DIR/batch-prescreen.mjs" "$jd_file" "$PROFILE_FILE" 2>/dev/null || true)"
     if [[ "$prescreen_verdict" == SKIP:* ]]; then
       prescreen_reason="${prescreen_verdict#SKIP:}"
       prescreen_reason="${prescreen_reason#"${prescreen_reason%%[![:space:]]*}"}"
