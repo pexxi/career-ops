@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readReport, findApplication, pdfReadyForReport, trackerCanDelete } from "@/lib/career-ops";
+import { readReport, findApplication, pdfReadyForReport, trackerCanDelete, jdArchiveForReport } from "@/lib/career-ops";
 import { resolveTailoredCover } from "@/lib/apply/cover";
 import { ReportView } from "@/components/report-view";
 import { pipelineQuery } from "@/lib/pipeline-navigation.mjs";
@@ -31,6 +31,7 @@ export default async function ReportPage({ params, searchParams }: {
       canDelete={trackerCanDelete()}
       pdfReadyFromIndex={await pdfReadyForReport(id)}
       coverReady={coverReady}
+      jdArchive={jdArchiveForReport(id)}
       backHref={`/pipeline${query ? `?${query}` : ""}`}
       applyHref={`/pipeline/${encodeURIComponent(id)}/apply${query ? `?${query}` : ""}`}
       reportNum={reportNumberFor(id, app, report?.file ?? null)}

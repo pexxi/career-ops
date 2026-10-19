@@ -271,6 +271,34 @@ export async function pdfPathForReport(n: string): Promise<string | null> {
 }
 
 /**
+ * The saved posting for a report: the full-page screenshot PDF and the page-text
+ * .md that archive-posting.mjs --report=N writes to jds/. Matched on the leading
+ * report number (padded or not, same rule as jd-capture.mjs, which this app
+ * can't import from outside its root); newest file of each type wins.
+ */
+export function jdArchiveForReport(n: string): { pdf: string | null; md: string | null } {
+  const none = { pdf: null, md: null };
+  if (!/^\d+$/.test(n)) return none;
+  const jdsDir = path.join(careerOpsRoot(), "jds");
+  let names: string[];
+  try {
+    names = fs.readdirSync(jdsDir);
+  } catch {
+    return none;
+  }
+  const target = Number(n);
+  const newest = (ext: string): string | null => {
+    const hits = names
+      .filter((name) => name.endsWith(ext) && Number(/^(\d+)-/.exec(name)?.[1]) === target)
+      .map((name) => path.join(jdsDir, name))
+      .filter((abs) => isRegularContainedFile(abs, jdsDir))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    return hits[0] ?? null;
+  };
+  return { pdf: newest(".pdf"), md: newest(".md") };
+}
+
+/**
  * Server-side lifecycle of the user's setup — mirrors the prerequisite list that
  * doctor.mjs uses (cv.md, config/profile.yml, modes/_profile.md, portals.yml), by
  * plain file-stat (no subprocess). Drives the home branch: first-run (no CV) →

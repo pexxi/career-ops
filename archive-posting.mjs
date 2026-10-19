@@ -13,8 +13,9 @@
  *   node archive-posting.mjs --pipeline          Archive pending URLs in data/pipeline.md
  *   node archive-posting.mjs --dry-run <url>     Preview filename without saving
  *
- * Output:    jds/YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.pdf
- *            jds/NNN-YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.pdf   (with --report)
+ * Output:    jds/YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.pdf    full-page screenshot
+ *            jds/YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.md     page text
+ *            jds/NNN-YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.{pdf,md}   (with --report)
  *            Add -2, -3, etc. before .pdf when the filename already exists.
  * Reference: local:jds/{filename}  (paste into pipeline.md)
  *
@@ -80,8 +81,9 @@ const HELP_TEXT = `
     --help             Show this help
 
   OUTPUT
-    jds/YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.pdf
-    jds/NNN-YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.pdf     with --report
+    jds/YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.pdf      full-page screenshot
+    jds/YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.md       page text
+    jds/NNN-YYYY-MM-DD_company-slug_role-slug_{sha256(url)[0:16]}.{pdf,md}   with --report
     Add -2, -3, etc. before .pdf when the filename already exists.
 
   WHY --report
@@ -204,6 +206,30 @@ function captureFilename(company, role, url) {
   const identity = createHash('sha256').update(url).digest('hex').slice(0, 16);
   const base = `${today()}_${captureSlug(company)}_${captureSlug(role)}_${identity}.pdf`;
   return reportNum ? `${reportPrefix(reportNum)}-${base}` : base;
+}
+
+/** The text capture sits next to the PDF under the same name. */
+function mdFilenameFor(pdfFilename) {
+  return pdfFilename.replace(/\.pdf$/, '.md');
+}
+
+/**
+ * Wrap a full-page PNG screenshot in an A4 PDF. Rendered in its own context so
+ * the egress guard (which only allows http/https) never sees the data: image;
+ * nothing here touches the network.
+ */
+async function screenshotToPdf(browser, png) {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.setContent(
+      `<html><body style="margin:0"><img style="width:100%;display:block" src="data:image/png;base64,${png.toString('base64')}"></body></html>`,
+      { waitUntil: 'load' },
+    );
+    return await page.pdf({ format: 'a4', printBackground: true, margin: { top: '0', right: '0', bottom: '0', left: '0' } });
+  } finally {
+    await context.close();
+  }
 }
 
 /**
@@ -413,17 +439,17 @@ export async function archiveUrl(browser, url, { company: companyHint, role: rol
 
     mkdirSync(JDS_DIR, { recursive: true });
 
-    const pdfBuffer = await page.pdf({
-      format: 'a4',
-      printBackground: true,
-      margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' },
-      preferCSSPageSize: false,
-    });
+    // A full-page screenshot rather than a print layout: print CSS often hides
+    // or reflows parts of a posting, while the screenshot keeps what the page
+    // actually showed. Wrapped in a PDF so it opens anywhere and pages cleanly.
+    const png = await page.screenshot({ fullPage: true });
+    const pdfBuffer = await screenshotToPdf(browser, png);
 
     const baseFilename = captureFilename(company, role, url);
     let filename;
     // URL identity separates requisitions; exclusive creation also preserves
-    // older snapshots of the same URL, including simultaneous captures.
+    // older snapshots of the same URL, including simultaneous captures. The
+    // .md page text shares the pdf's base name, so it follows the -2, -3 suffix.
     for (let attempt = 0; ; attempt++) {
       filename = attempt ? baseFilename.replace(/\.pdf$/, `-${attempt + 1}.pdf`) : baseFilename;
       const outputPath = join(JDS_DIR, filename);
@@ -445,13 +471,21 @@ export async function archiveUrl(browser, url, { company: companyHint, role: rol
       break;
     }
     const reference = `local:jds/${filename}`;
+    const mdFilename = mdFilenameFor(filename);
+    const mdReference = `local:jds/${mdFilename}`;
+
     console.log(`   Output:  jds/${filename}`);
+    console.log(`            jds/${mdFilename}`);
+
+    const markdown = `# ${role} at ${company}\n\n**URL:** ${url}\n**Captured:** ${today()}\n\n---\n\n${bodyText.trim()}\n`;
+    await writeFile(join(JDS_DIR, mdFilename), markdown);
 
     const sizeKb = (pdfBuffer.length / 1024).toFixed(1);
     console.log(`Saved (${sizeKb} KB)`);
     console.log(`Reference: ${reference}`);
+    console.log(`Reference: ${mdReference}`);
 
-    return { filename, reference, url, size: pdfBuffer.length };
+    return { filename, mdFilename, reference, mdReference, url, size: pdfBuffer.length };
 
   } finally {
     await context.close();
@@ -493,8 +527,9 @@ async function main() {
       console.log(`   Company: ${resolvedCompany}`);
       console.log(`   Role:    ${resolvedRole}`);
       console.log(`   Output:  jds/${filename}`);
+      console.log(`            jds/${mdFilenameFor(filename)}`);
       console.log('   (dry-run — not saved)');
-      results.push({ url, filename, reference, skipped: true });
+      results.push({ url, filename, reference, mdReference: `local:jds/${mdFilenameFor(filename)}`, skipped: true });
     }
   } else {
     // Sequential — project convention: never Playwright in parallel
@@ -531,6 +566,7 @@ async function main() {
     console.log('\n  References (paste into pipeline.md or a report header):');
     for (const r of references) {
       console.log(`    ${r.reference}`);
+      if (r.mdReference) console.log(`    ${r.mdReference}`);
     }
   }
   console.log('─'.repeat(62) + '\n');

@@ -65,6 +65,9 @@ The heart of the tool. `oferta.md` defines the A–H evaluation blocks (H is con
 ### Tracking — `data/` + `reports/` + tracker scripts
 Every evaluated offer is registered. `data/applications.md` is the canonical tracker table; `reports/{NNN}-{company}-{date}.md` holds full evaluations. `tracker.mjs`, `merge-tracker.mjs`, `dedup-tracker.mjs`, `normalize-statuses.mjs`, and `reconcile-pipeline.mjs` keep it consistent (atomic writes + a SQLite index). Report numbers are claimed atomically via `reserve-report-num.mjs`.
 
+### JD snapshot — keep the posting after it closes
+Every evaluation runs `archive-posting.mjs <url> --report={num}`, which writes `jds/{NNN}-{date}_{company}_{role}.pdf` (a full-page screenshot wrapped in an A4 PDF) and a `.md` with the page text. The report header's `**JD Archive:**` line links both. The web report page (`/pipeline/[id]`) finds them by report number (`jdArchiveForReport` in `web/src/lib/career-ops.ts`) and serves them through `/api/jd-archive?n={num}&type=pdf|md`. `jd-capture.mjs` and `outcome.mjs` resolve the same files by report number.
+
 ### Liveness — never evaluate a dead posting
 `check-liveness.mjs` / `liveness-*.mjs` verify a posting is still open (zero-token) before it costs evaluation time.
 

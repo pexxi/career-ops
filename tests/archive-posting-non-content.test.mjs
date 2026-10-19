@@ -23,7 +23,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, existsSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, readdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -56,6 +56,8 @@ function makeFakeBrowser({ bodyText, title = 'Backend Engineer | Acme', h1 = 'Ba
       if (evaluateRejects) throw new Error('fake: page.evaluate() failed (simulated extraction failure)');
       return bodyText;
     },
+    async screenshot() { return Buffer.from('fake-png'); },
+    async setContent() {},
     async pdf() { pdfCalled = true; return Buffer.from('%PDF-fake'); },
   };
   const context = {
@@ -121,6 +123,8 @@ test('a real posting is archived normally (control)', async () => {
   assert.equal(pdfCalled(), true, 'a real posting must still be captured');
   assert.match(result.filename, /\.pdf$/);
   assert.ok(jdsFiles().includes(result.filename), 'the file was actually written to jds/');
+  assert.ok(jdsFiles().includes(result.mdFilename), 'the page text was written next to the PDF');
+  assert.match(readFileSync(join(tmp, 'jds', result.mdFilename), 'utf8'), /Senior Backend Engineer/);
 });
 
 test('a real extraction FAILURE (page.evaluate rejects) fails CLOSED — refuses to archive blind', async () => {

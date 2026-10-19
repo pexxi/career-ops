@@ -52,6 +52,7 @@ export function ReportView({
   canDelete = false,
   pdfReadyFromIndex = false,
   coverReady = false,
+  jdArchive = { pdf: null, md: null },
   backHref = "/pipeline",
   applyHref,
   reportNum = null,
@@ -68,6 +69,8 @@ export function ReportView({
    *  the page, see resolveTailoredCover). The page drafts letters through the
    *  cover run but does not render them, so this link only finds CLI PDFs. */
   coverReady?: boolean;
+  /** The saved posting in jds/ (archive-posting.mjs --report=N), if any. */
+  jdArchive?: { pdf: string | null; md: string | null };
   backHref?: string;
   applyHref?: string;
   reportNum?: number | null;
@@ -127,6 +130,26 @@ export function ReportView({
               className="inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-400 max-sm:min-h-[44px]"
             >
               <FileText className="size-3.5" /> View cover
+            </a>
+          )}
+          {jdArchive.pdf && (
+            <a
+              href={`/api/jd-archive?n=${encodeURIComponent(id)}&type=pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted transition-colors hover:text-brand max-sm:min-h-[44px]"
+            >
+              <FileText className="size-3.5" /> Saved posting
+            </a>
+          )}
+          {jdArchive.md && (
+            <a
+              href={`/api/jd-archive?n=${encodeURIComponent(id)}&type=md`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted transition-colors hover:text-brand max-sm:min-h-[44px]"
+            >
+              <FileText className="size-3.5" /> Posting text
             </a>
           )}
         </div>

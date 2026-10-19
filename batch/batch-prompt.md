@@ -599,6 +599,7 @@ Report header:
 **Work Auth:** {✅ Sponsors | ➖ Not needed | ⚠️ Unstated | ⛔ No sponsorship}
 **URL:** {{URL}}
 **PDF:** {output/cv-candidate-{{REPORT_NUM}}-{company-slug}-{{DATE}}.pdf if score >= resolved auto_pdf_score_threshold, otherwise a localized equivalent of `not generated — run /career-ops pdf {company-slug} to create on demand` in `language.output`}
+**JD Archive:** {[screenshot](../jds/{file}.pdf) · [text](../jds/{file}.md), or not captured ({reason})}
 **Batch ID:** {{ID}}
 
 {the `## Verdict (lead)` sentence, copied verbatim}
@@ -671,6 +672,7 @@ risk_summary:
 
 Then include:
 
+- `**JD Archive:**` header — once the report number is known, run `node archive-posting.mjs <url> --company={company-slug} --report={{REPORT_NUM}}` (same slug as the report filename) and fill the `**JD Archive:**` header with links to the two files it prints: `[screenshot](../jds/{file}.pdf) · [text](../jds/{file}.md)`. The PDF is a full-page screenshot and the `.md` is the page text, kept so the posting stays readable offline after it closes. Use the employer URL when one was confirmed. Skip the run for LinkedIn URLs (the one-browser-attempt guard) and for pasted JDs with no URL. This step never blocks the report: if the capture is skipped or fails, write `**JD Archive:** not captured ({reason})` and continue. It does not replace the verbatim JD section below.
 - `## Job Description (archived verbatim)` — the full JD pasted verbatim. REQUIRED, not optional (AGENTS.md rule #2789): the `**URL:**` header is a live pointer and rots the moment the posting closes, so this section is the only durable record of what was asked. `check-jd-archive.mjs` validates it. Paste `{{JD_FILE}}`'s content unchanged (or, when the JD was fetched instead of prefetched, the fetched text as-is). Never paraphrase or restate it under this heading. If you cannot reproduce the text in full, run `node archive-posting.mjs <url> --company={company-slug} --report={{REPORT_NUM}}` (the same slug as in the report filename) and use the pointer sentence from `modes/oferta.md` instead; `check-jd-archive.mjs` does not credit a section that calls itself a paraphrase.
 - `## Machine Summary`
 - `## A) Role Summary`
