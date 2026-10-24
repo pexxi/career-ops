@@ -1,0 +1,40 @@
+{
+  "name": "@career-ops/web2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "career-ops management cockpit — local-first view over the same markdown files (web2, separate from web/)",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "build": "vite build",
+    "start": "node server/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@mantine/charts": "^9.7.3",
+    "@mantine/core": "^9.7.3",
+    "@mantine/hooks": "^9.7.3",
+    "@mantine/notifications": "^9.7.3",
+    "@tabler/icons-react": "^3.49.0",
+    "@tanstack/react-query": "^5.104.3",
+    "hono": "^4.13.13",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "postcss": "^8.5.30",
+    "postcss-preset-mantine": "^1.18.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
