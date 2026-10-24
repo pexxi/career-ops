@@ -6,6 +6,7 @@ import { serve } from "@hono/node-server";
 // v2 moved static serving to a subpath export.
 import { serveStatic } from "@hono/node-server/serve-static";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { locateFiles } from "../lib/paths.mjs";
@@ -30,6 +31,7 @@ const STATES = [
 ];
 
 const app = new Hono();
+export { app };
 
 app.onError((err, c) => {
   const status = err.code === "ENOENT" ? 404 : 500;
@@ -171,7 +173,15 @@ if (fs.existsSync(distDir)) {
   app.get("*", serveStatic({ path: path.join(distDir, "index.html") }));
 }
 
-const port = Number(process.env.WEB2_PORT ?? (process.argv.includes("--prod") ? 3001 : 4001));
-serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`web2 API listening on http://127.0.0.1:${info.port}`);
-});
+// Bind the port only when this module is the entrypoint (`node server/index.mjs`,
+// dev.mjs, `npm start`) — importing it from tests must stay socket-free.
+const isEntrypoint =
+  process.env.WEB2_SERVE === "1" ||
+  (!!process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href);
+
+if (isEntrypoint) {
+  const port = Number(process.env.WEB2_PORT ?? (process.argv.includes("--prod") ? 3001 : 4001));
+  serve({ fetch: app.fetch, port }, (info) => {
+    console.log(`web2 API listening on http://127.0.0.1:${info.port}`);
+  });
+}

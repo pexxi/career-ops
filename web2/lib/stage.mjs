@@ -5,6 +5,9 @@
 //   closed   — outcome recorded (row is reference material)
 export const STAGE_ORDER = ["deciding", "active", "closed", "all"];
 
+/** The lens the Applications page opens in. */
+export const DEFAULT_STAGE = "deciding";
+
 const STATUS_TO_STAGE = {
   Evaluated: "deciding",
   Applied: "active",
@@ -31,3 +34,4 @@ export function rowsInStage(rows, stage) {
 // for Overview KPIs.
 export const ACTIVE_STATUSES = ["Applied", "Responded", "Assessment", "Interview"];
 export const DECIDING_STATUSES = ["Evaluated"];
+

@@ -252,6 +252,11 @@ plan/
 # patterns above (cv.md, portals.yml).
 !test-fixtures/**
 
+# web2's route/seam fixtures are fictional too — same rationale as above, and
+# the same trap: an unanchored `applications.md` rule would swallow them and a
+# fresh clone would run its tests against missing files.
+!web2/tests/fixtures/**
+
 # Profile intake sources (master CV / LinkedIn export / diplomas / references
 # — user PII, never commit). Ship only the system-owned scaffold. #1723
 /documents
