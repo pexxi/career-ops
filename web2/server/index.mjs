@@ -14,6 +14,7 @@ import { readTracker } from "../lib/tracker.mjs";
 import { readHistoryByRow } from "../lib/statuslog.mjs";
 import { listReports, readReport } from "../lib/reports.mjs";
 import { overview } from "../lib/overview.mjs";
+import { intelDir, readIntel } from "../lib/intel.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 import { parseStatusLog } from "../../funnel-velocity.mjs";
 
@@ -123,6 +124,13 @@ app.post("/api/status", async (c) => {
     payload = null;
   }
   return c.json({ ok: true, result: payload ?? {} });
+});
+
+// Company intel (ticket 08): read-only view of the local cache; never scrapes.
+app.get("/api/intel", async (c) => {
+  const company = c.req.query("company")?.trim();
+  if (!company) return c.json({ error: { code: "USAGE", message: "company query parameter is required" } }, 400);
+  return c.json({ snapshot: await readIntel(intelDir(), company) });
 });
 
 // System health (ticket 07): each file the app reads is ok, missing (ENOENT)

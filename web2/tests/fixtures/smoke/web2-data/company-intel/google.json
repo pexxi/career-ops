@@ -1,0 +1,19 @@
+{
+  "company": "Google",
+  "sources": [
+    {
+      "source": "Glassdoor",
+      "url": "https://www.glassdoor.com/Reviews/Google-Reviews-E9079.htm",
+      "fetchedAt": "2026-10-20",
+      "kind": "reviews",
+      "data": { "rating": 4.3, "reviewCount": 1000, "pros": ["smart colleagues"], "cons": ["slow promotions"] }
+    },
+    {
+      "source": "levels.fyi",
+      "url": "https://www.levels.fyi/companies/google/salaries/software-engineer",
+      "fetchedAt": "2026-10-21",
+      "kind": "salaries",
+      "data": { "medianTotal": 250000, "currency": "USD", "location": "United States", "levels": [{ "level": "L6", "total": 400000 }] }
+    }
+  ]
+}

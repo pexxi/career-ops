@@ -478,6 +478,7 @@ function DrawerContent({ row }: { row: AppRow }) {
         <Tabs.List>
           <Tabs.Tab value="focus">Stage focus</Tabs.Tab>
           <Tabs.Tab value="full">Full report</Tabs.Tab>
+          <Tabs.Tab value="intel">Company intel</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="focus" pt="sm">
@@ -508,6 +509,10 @@ function DrawerContent({ row }: { row: AppRow }) {
         <Tabs.Panel value="full" pt="sm">
           {/* Mounted only while active: the report payload stays lazy. */}
           {tab === "full" && <FullReport reportNum={row.reportNum} />}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="intel" pt="sm">
+          {tab === "intel" && <CompanyIntel company={row.company} />}
         </Tabs.Panel>
       </Tabs>
 
@@ -545,6 +550,88 @@ function FullReport({ reportNum }: { reportNum: string | null }) {
   return (
     <ScrollArea.Autosize mah="calc(100vh - 200px)">
       <Markdown remarkPlugins={[remarkGfm]}>{reportQuery.data.report.markdown}</Markdown>
+    </ScrollArea.Autosize>
+  );
+}
+
+/** Company intel from the local cache (ticket 08 / ADR 0004). Every item is
+ * stamped with its source and fetch date; the app never scrapes live. */
+function CompanyIntel({ company }: { company: string }) {
+  const query = useQuery({ queryKey: ["intel", company], queryFn: () => api.intel(company) });
+  if (query.isPending) {
+    return (
+      <Center py="md">
+        <Loader size="sm" />
+      </Center>
+    );
+  }
+  if (query.isError) {
+    return (
+      <Alert color="red" title="Intel could not be loaded">
+        {query.error.message}
+      </Alert>
+    );
+  }
+  const snapshot = query.data.snapshot;
+  if (!snapshot || snapshot.sources.length === 0) {
+    return (
+      <Alert color="gray" title={`No intel yet for ${company}`}>
+        Capture reviews and salaries into the local cache first — see <Code>web2/scripts/capture-intel.md</Code>.
+      </Alert>
+    );
+  }
+  // Newest capture first; older ones stay visible (never overwritten).
+  const sources = [...snapshot.sources].sort((a, b) => b.fetchedAt.localeCompare(a.fetchedAt));
+  return (
+    <ScrollArea.Autosize mah="calc(100vh - 260px)">
+      <Stack gap="sm">
+        {sources.map((s, i) => (
+          <Paper key={i} withBorder p="sm" radius="md">
+            <Group justify="space-between" mb={4} wrap="nowrap">
+              <Badge variant="light" color={s.kind === "reviews" ? "grape" : "teal"}>
+                {s.kind}
+              </Badge>
+              <Text size="xs" c="dimmed">
+                <Anchor href={s.url} target="_blank" rel="noreferrer" size="xs">
+                  {s.source}
+                </Anchor>{" "}
+                · fetched {s.fetchedAt}
+                {s.asOf ? ` · data as of ${s.asOf}` : ""}
+              </Text>
+            </Group>
+            {s.kind === "reviews" ? (
+              <Stack gap={4}>
+                <Text size="sm">
+                  Rating {s.data.rating ?? "—"}
+                  {s.data.reviewCount != null ? ` from ${s.data.reviewCount} reviews` : ""}
+                </Text>
+                {(s.data.pros ?? []).length > 0 && (
+                  <Text size="sm">
+                    <b>Pros:</b> {s.data.pros!.join(" · ")}
+                  </Text>
+                )}
+                {(s.data.cons ?? []).length > 0 && (
+                  <Text size="sm">
+                    <b>Cons:</b> {s.data.cons!.join(" · ")}
+                  </Text>
+                )}
+              </Stack>
+            ) : (
+              <Stack gap={4}>
+                <Text size="sm">
+                  Median total {s.data.medianTotal != null ? s.data.medianTotal.toLocaleString() : "—"} {s.data.currency ?? ""}
+                  {s.data.location ? ` · ${s.data.location}` : ""}
+                </Text>
+                {(s.data.levels ?? []).map((l, j) => (
+                  <Text key={j} size="xs" c="dimmed">
+                    {l.level}: {l.total.toLocaleString()} {s.data.currency ?? ""}
+                  </Text>
+                ))}
+              </Stack>
+            )}
+          </Paper>
+        ))}
+      </Stack>
     </ScrollArea.Autosize>
   );
 }

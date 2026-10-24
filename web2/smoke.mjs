@@ -66,7 +66,12 @@ async function main() {
 
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
-  const env = { ...process.env, CAREER_OPS_ROOT: tmp, WEB2_PORT: String(port) };
+  const env = {
+    ...process.env,
+    CAREER_OPS_ROOT: tmp,
+    WEB2_DATA_DIR: path.join(tmp, "web2-data"),
+    WEB2_PORT: String(port),
+  };
   delete env.CAREER_OPS_DATA_DIR;
   delete env.CAREER_OPS_TRACKER;
 
@@ -193,6 +198,12 @@ async function main() {
       await absent(page.getByText("No transitions recorded"));
     });
 
+    await step("a company with no snapshot shows the capture empty state", async () => {
+      await page.getByRole("tab", { name: "Company intel" }).click();
+      await visible(page.getByText("No intel yet for OpenAI"));
+      await page.getByRole("tab", { name: "Stage focus" }).click();
+    });
+
     await step("full report + JD archive stay behind the explicit tab", async () => {
       await absent(page.getByRole("heading", { name: /Evaluation: OpenAI/ }));
       await page.getByRole("tab", { name: "Full report" }).click();
@@ -208,6 +219,14 @@ async function main() {
       await visible(page.getByText("loop scheduled"));
       await absent(page.getByText("Hard stops"));
       await absent(page.getByText("Soft gaps"));
+    });
+
+    await step("company intel tab shows cached items with source + fetch date", async () => {
+      await page.getByRole("tab", { name: "Company intel" }).click();
+      await visible(page.getByText("fetched 2026-10-20"));
+      await visible(page.getByText("fetched 2026-10-21"));
+      await visible(page.getByText("smart colleagues", { exact: false }));
+      await visible(page.getByText("L6: 400,000 USD"));
     });
 
     await step("closed row condenses to one outcome line + notes", async () => {

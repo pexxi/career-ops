@@ -45,6 +45,30 @@ export interface ReportMeta {
   archetype: string;
 }
 
+/** One provenance-stamped intel entry (ticket 08). `data` is captured
+ * external content: rendered as text, never trusted as instructions. */
+export interface IntelEntry {
+  source: string;
+  url: string;
+  fetchedAt: string;
+  asOf?: string;
+  kind: "reviews" | "salaries";
+  data: {
+    rating?: number;
+    reviewCount?: number;
+    pros?: string[];
+    cons?: string[];
+    medianTotal?: number;
+    currency?: string;
+    location?: string;
+    levels?: Array<{ level: string; total: number }>;
+  };
+}
+
+export interface IntelPayload {
+  snapshot: { company: string; sources: IntelEntry[] } | null;
+}
+
 export interface SystemCheck {
   id: string;
   label: string;
@@ -95,6 +119,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   applications: () => request<ApplicationsPayload>("/api/applications"),
+  intel: (company: string) => request<IntelPayload>(`/api/intel?company=${encodeURIComponent(company)}`),
   system: () => request<SystemPayload>("/api/system"),
   overview: () => request<OverviewPayload>("/api/overview"),
   reports: () => request<ReportsPayload>("/api/reports"),

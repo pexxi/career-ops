@@ -14,7 +14,7 @@ const { app } = await import("../server/index.mjs");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = (name) => path.join(here, "fixtures", name);
 
-const envKeys = ["CAREER_OPS_ROOT", "CAREER_OPS_DATA_DIR", "CAREER_OPS_TRACKER"];
+const envKeys = ["CAREER_OPS_ROOT", "CAREER_OPS_DATA_DIR", "CAREER_OPS_TRACKER", "WEB2_DATA_DIR"];
 let saved = {};
 
 beforeEach(() => {
@@ -209,4 +209,25 @@ test("GET /api/system reports each file as ok / missing / error with its path", 
   pointAt("tracker-missing");
   body = await (await app.request("/api/system")).json();
   assert.equal(body.checks[0].state, "missing");
+});
+
+// Ticket 08: the drawer reads intel by the tracker's company name.
+test("GET /api/intel returns the snapshot for a tracker company spelling, null when none", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-intel-route-"));
+  try {
+    process.env.WEB2_DATA_DIR = tmp;
+    const { addIntel, intelDir } = await import("../lib/intel.mjs");
+    await addIntel(intelDir(), "Google", {
+      source: "levels.fyi", url: "https://www.levels.fyi/companies/google/salaries", fetchedAt: "2026-10-24",
+      kind: "salaries", data: { medianTotal: 300000, currency: "USD" },
+    });
+    let body = await (await app.request(`/api/intel?company=${encodeURIComponent("Google LLC")}`)).json();
+    assert.equal(body.snapshot.sources[0].source, "levels.fyi");
+    body = await (await app.request("/api/intel?company=Unknown")).json();
+    assert.equal(body.snapshot, null);
+    const bad = await app.request("/api/intel");
+    assert.equal(bad.status, 400);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
 });
