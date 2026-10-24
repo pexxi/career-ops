@@ -82,7 +82,7 @@ export function OverviewPage() {
       <SimpleGrid cols={{ base: 2, md: 4 }}>
         <KpiCard label="Deciding" value={String(kpis.deciding)} lens="deciding" />
         <KpiCard label="Active process" value={String(kpis.active)} lens="active" />
-        <KpiCard label="Ever hired" value={String(kpis.everHired)} lens="closed" />
+        <KpiCard label="Ever hired" value={String(kpis.everHired)} lens="closed/Hired" />
         <KpiCard label="Average score" value={kpis.avgScore != null ? kpis.avgScore.toFixed(2) : "—"} lens="all" />
       </SimpleGrid>
       <Paper withBorder p="md" radius="md">
@@ -792,7 +792,8 @@ export function ApplicationsPage() {
     const fromHash = window.location.hash.split("/")[1];
     return LENSES.some((l) => l.value === fromHash) ? fromHash : DEFAULT_STAGE;
   });
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  // "#applications/closed/Hired" (the Ever hired card) also pre-sets the status filter.
+  const [statusFilter, setStatusFilter] = useState<string | null>(() => window.location.hash.split("/")[2] ?? null);
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
   // Multi-row selection (ticket 04) and the bulk confirm modal.
   const [selected, setSelected] = useState<Set<string>>(new Set());

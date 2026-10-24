@@ -190,9 +190,12 @@ app.post("/api/profile/chat", async (c) => {
   if (!config.ok) return c.json({ error: { code: "COACH_NOT_CONFIGURED", message: config.reason } }, 503);
 
   const sessionId = body?.sessionId || randomUUID();
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(String(sessionId))) {
+    return c.json({ error: { code: "USAGE", message: "bad sessionId" } }, 400);
+  }
   const files = await locateFiles();
-  const history = await readTranscript(chatDir(), sessionId).catch(() => null);
-  if (!history) return c.json({ error: { code: "USAGE", message: "bad sessionId" } }, 400);
+  // A corrupt transcript surfaces as a server error, not as the client's mistake.
+  const history = await readTranscript(chatDir(), sessionId);
   const reports = await Promise.all(
     reportNums.map(async (n) => ({ num: n, markdown: (await readReport(files.reportsDir, Number(n))).markdown })),
   );
@@ -226,7 +229,9 @@ app.get("/api/system", async (c) => {
   const checks = await Promise.all([
     check("tracker", "Application tracker", files.tracker, async () => {
       const { rows, warnings } = await readTracker(files.tracker);
-      return `${rows.length} rows${warnings.length ? `, ${warnings.length} skipped (malformed)` : ""}`;
+      // Skipped rows are a parse problem, so the file reads as broken (like the ledger).
+      if (warnings.length) throw new Error(`${warnings.length} row(s) skipped as malformed; first: ${warnings[0]}`);
+      return `${rows.length} rows`;
     }),
     check("statusLog", "Status ledger", files.statusLog, async () => {
       const text = await fs.promises.readFile(files.statusLog, "utf8");

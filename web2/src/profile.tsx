@@ -73,6 +73,7 @@ function Reference({ parsed }: { parsed: ProfileYaml }) {
         <Facts title="Compensation" entries={Object.entries(parsed.compensation ?? {})} />
         <Facts title="Work preferences" entries={Object.entries(parsed.work_preferences ?? {})} />
       </SimpleGrid>
+      <Facts title="Location" entries={Object.entries(parsed.location ?? {})} />
       <Paper withBorder p="md" radius="md">
         <Text fw={600} mb="xs">
           Target roles
@@ -192,7 +193,23 @@ export function ProfileApply({ initialFile = "profile", initialPatch = "" }: { i
         />
         {previewed && (
           <Alert color="green" title={`Applies cleanly to ${preview.result.path}`}>
-            <PatchView patch={patch} />
+            <Tabs defaultValue="diff">
+              <Tabs.List>
+                <Tabs.Tab value="diff">Diff</Tabs.Tab>
+                <Tabs.Tab value="before">Before</Tabs.Tab>
+                <Tabs.Tab value="after">After</Tabs.Tab>
+              </Tabs.List>
+              <Tabs.Panel value="diff" pt="xs">
+                <PatchView patch={patch} />
+              </Tabs.Panel>
+              {(["before", "after"] as const).map((side) => (
+                <Tabs.Panel key={side} value={side} pt="xs">
+                  <ScrollArea.Autosize mah={360}>
+                    <Code block>{preview.result[side] || "(empty file)"}</Code>
+                  </ScrollArea.Autosize>
+                </Tabs.Panel>
+              ))}
+            </Tabs>
           </Alert>
         )}
         <Group gap="sm">

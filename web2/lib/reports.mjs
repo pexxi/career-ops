@@ -60,7 +60,9 @@ export async function readReport(reportsDirPath, num) {
 
 /** Every `NNN-*.md` in the reports dir → header facts (no body), newest number first. */
 export async function listReports(reportsDirPath) {
-  const names = (await fs.readdir(reportsDirPath)).filter((f) => /^\d+-.*\.md$/.test(f));
+  // No reports dir yet = no reports (the System page reports it as missing).
+  const all = await fs.readdir(reportsDirPath).catch((err) => (err.code === "ENOENT" ? [] : Promise.reject(err)));
+  const names = all.filter((f) => /^\d+-.*\.md$/.test(f));
   const reports = await Promise.all(
     names.map(async (file) => ({
       num: padNum(Number.parseInt(file, 10)),

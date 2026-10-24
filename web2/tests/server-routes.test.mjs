@@ -304,3 +304,30 @@ test("profile coach: missing config → setup state + 503 on chat; configured st
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+// Review fixes: no reports dir is an empty list (System reports it missing),
+// and a tracker with skipped rows reads as broken, not healthy.
+test("GET /api/reports with no reports dir is an empty list, not an error", async () => {
+  pointAt("tracker-ok");
+  const res = await app.request("/api/reports");
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).reports, []);
+});
+
+test("GET /api/system marks a tracker with malformed rows as error", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-system-"));
+  try {
+    await fs.mkdir(path.join(tmp, "data"));
+    await fs.writeFile(
+      path.join(tmp, "data", "applications.md"),
+      "| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|---|---|---|---|---|---|---|---|\n" +
+        "| 1 | 2026-09-01 | A | X | 4.0/5 | Evaluated | ❌ | — | |\n| 2 | only | three |\n",
+    );
+    process.env.CAREER_OPS_ROOT = tmp;
+    const body = await (await app.request("/api/system")).json();
+    assert.equal(body.checks[0].state, "error");
+    assert.match(body.checks[0].detail, /1 row\(s\) skipped/);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});

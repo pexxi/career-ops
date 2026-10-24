@@ -28,5 +28,5 @@ agent would say — accepted, because proposals are advisory and every write is
 user-confirmed. Transcripts are one JSONL per session under gitignored
 `web2/data/chat/`.
 
-Numbering note: 0001–0004 are reserved by acceptance criteria in the live
-web2-dashboard backlog (issues 03 and 08); this is the first ADR file to land.
+Numbering note: 0001–0002 were never written; 0003 and 0004 come from the
+web2-dashboard backlog (issues 03 and 08).
