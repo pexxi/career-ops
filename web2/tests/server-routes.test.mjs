@@ -126,3 +126,20 @@ test("POST /api/status surfaces a set-status.mjs rejection as SET_STATUS_FAILED"
   assert.equal(body.error.code, "SET_STATUS_FAILED");
   assert.match(body.error.message, /No tracker row with #99/);
 });
+
+// Ticket 05: the Reports page lists every reports/*.md with its header facts.
+test("GET /api/reports lists reports with number, company, role, score, date, legitimacy", async () => {
+  pointAt("smoke");
+  const res = await app.request("/api/reports");
+  assert.equal(res.status, 200);
+  const { reports } = await res.json();
+  assert.equal(reports.length, 3);
+  assert.deepEqual(reports.map((r) => r.num), ["003", "002", "001"]);
+  const openai = reports.find((r) => r.num === "001");
+  assert.equal(openai.company, "OpenAI");
+  assert.equal(openai.role, "Forward Deployed Engineer");
+  assert.equal(openai.score, 4.2);
+  assert.equal(openai.date, "2026-08-25");
+  assert.equal(openai.legitimacy, "High Confidence");
+  assert.equal(openai.markdown, undefined, "the list must not ship every report body");
+});

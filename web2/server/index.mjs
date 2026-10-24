@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import { locateFiles } from "../lib/paths.mjs";
 import { readTracker } from "../lib/tracker.mjs";
 import { readHistoryByRow } from "../lib/statuslog.mjs";
-import { readReport } from "../lib/reports.mjs";
+import { listReports, readReport } from "../lib/reports.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 
 // Canonical states from templates/states.yml (set-status.mjs is the real
@@ -41,6 +41,11 @@ app.get("/api/applications", async (c) => {
     };
   });
   return c.json({ trackerPath: files.tracker, dataRoot: files.dataRoot, rows, warnings: tracker.warnings });
+});
+
+app.get("/api/reports", async (c) => {
+  const files = await locateFiles();
+  return c.json({ reportsDir: files.reportsDir, reports: await listReports(files.reportsDir) });
 });
 
 app.get("/api/reports/:num", async (c) => {

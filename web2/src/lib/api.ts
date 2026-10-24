@@ -45,6 +45,11 @@ export interface ReportMeta {
   archetype: string;
 }
 
+export interface ReportsPayload {
+  reportsDir: string;
+  reports: Array<ReportMeta & { num: string }>;
+}
+
 export interface ReportPayload {
   report: ReportMeta & { markdown: string };
 }
@@ -69,6 +74,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   applications: () => request<ApplicationsPayload>("/api/applications"),
+  reports: () => request<ReportsPayload>("/api/reports"),
   report: (num: string | number, signal?: AbortSignal) =>
     request<ReportPayload>(`/api/reports/${num}`, { signal }),
   setStatus: (num: string | number, state: string, note?: string) =>

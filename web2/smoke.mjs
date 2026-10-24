@@ -133,6 +133,29 @@ async function main() {
       await visible(page.getByRole("heading", { name: "Reports" }));
     });
 
+    await step("Reports list filters on company/role", async () => {
+      await goto("reports");
+      await visible(page.locator("tbody tr", { hasText: "Acme" }));
+      await visible(page.getByText("3 of 3 shown"));
+      await page.getByPlaceholder("Search company or role").fill("forward deployed");
+      await visible(page.getByText("1 of 3 shown"));
+      assert.equal(await page.locator("tbody tr", { hasText: "Acme" }).count(), 0);
+    });
+
+    await step("a report linked from a tracker row opens the stage-aware drawer", async () => {
+      await page.locator("tbody tr", { hasText: "OpenAI" }).click();
+      await visible(page.getByRole("tab", { name: "Stage focus" }));
+      await visible(page.getByText("Requires US citizenship"));
+    });
+
+    await step("an unlinked report opens straight on its full report", async () => {
+      await goto("reports");
+      await page.getByPlaceholder("Search company or role").fill("acme");
+      await page.locator("tbody tr", { hasText: "Acme" }).click();
+      await visible(page.getByText("Acme JD fixture line for the smoke test."));
+      await absent(page.getByRole("tab", { name: "Stage focus" }));
+    });
+
     await step("System screen renders", async () => {
       await goto("system");
       await visible(page.getByRole("heading", { name: "System" }));

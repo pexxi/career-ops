@@ -57,3 +57,16 @@ export async function readReport(reportsDirPath, num) {
   const md = await fs.readFile(path.join(reportsDirPath, file), "utf8");
   return { file, markdown: md, ...parseReportMeta(md) };
 }
+
+/** Every `NNN-*.md` in the reports dir → header facts (no body), newest number first. */
+export async function listReports(reportsDirPath) {
+  const names = (await fs.readdir(reportsDirPath)).filter((f) => /^\d+-.*\.md$/.test(f));
+  const reports = await Promise.all(
+    names.map(async (file) => ({
+      num: padNum(Number.parseInt(file, 10)),
+      file,
+      ...parseReportMeta(await fs.readFile(path.join(reportsDirPath, file), "utf8")),
+    })),
+  );
+  return reports.sort((a, b) => Number(b.num) - Number(a.num));
+}
