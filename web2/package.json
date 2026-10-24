@@ -9,7 +9,8 @@
     "build": "vite build",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"tests/**/*.test.mjs\""
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "smoke": "npm run build && node smoke.mjs"
   },
   "engines": {
     "node": ">=22"

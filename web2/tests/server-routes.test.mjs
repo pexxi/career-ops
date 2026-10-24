@@ -3,6 +3,8 @@
 // dir; env vars are saved and restored around every alteration.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,4 +86,43 @@ test("POST /api/status rejects an unknown state with 400 USAGE (no write attempt
   assert.equal(res.status, 400);
   const body = await res.json();
   assert.equal(body.error.code, "USAGE");
+});
+
+// Seam D (ticket 03): the drawer's one write action. The server must address
+// the tracker ROW (--row), not a bare "#N": on this fixture row 2 links report
+// #001, exactly the divergence the core's bare-numeric guard rejects — and
+// real trackers diverge the same way. The write must land, not reroute.
+test("POST /api/status changes a diverged row through --row, not a bare #N", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-status-"));
+  try {
+    await fs.cp(fixtureRoot("tracker-report-mismatch"), tmp, { recursive: true });
+    process.env.CAREER_OPS_ROOT = tmp;
+    const res = await app.request("/api/status", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ num: 2, state: "Applied" }),
+    });
+    assert.equal(res.status, 200);
+    const tracker = await fs.readFile(path.join(tmp, "data", "applications.md"), "utf8");
+    const row = tracker.split(/\r?\n/).find((line) => line.startsWith("| 2 |"));
+    assert.ok(row, "row 2 not found in the written tracker");
+    assert.match(row, /\| Applied \|/, `row 2 was not changed: ${row}`);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// A rejected write must come back as an explicit error the drawer can surface
+// — never a silent success and never a reroute to a different row.
+test("POST /api/status surfaces a set-status.mjs rejection as SET_STATUS_FAILED", async () => {
+  pointAt("tracker-ok");
+  const res = await app.request("/api/status", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ num: 99, state: "Applied" }),
+  });
+  assert.equal(res.status, 500);
+  const body = await res.json();
+  assert.equal(body.error.code, "SET_STATUS_FAILED");
+  assert.match(body.error.message, /No tracker row with #99/);
 });

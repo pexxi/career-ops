@@ -102,7 +102,10 @@ app.post("/api/status", async (c) => {
     );
   }
   const files = await locateFiles();
-  const args = [path.join(files.repoRoot, "set-status.mjs"), String(num), state, "--json"];
+  // --row, never a bare "#N": the bare numeric selector is ambiguous once the
+  // tracker's row IDs and its report links have diverged (the core guard
+  // rejects it on such rows), and the drawer is always addressing a row.
+  const args = [path.join(files.repoRoot, "set-status.mjs"), "--row", String(num), state, "--json"];
   if (note) args.push("--note", String(note));
 
   const result = await new Promise((resolve) => {
