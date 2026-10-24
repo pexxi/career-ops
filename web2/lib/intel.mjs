@@ -48,3 +48,58 @@ export async function addIntel(dir, company, entry) {
   await fs.rename(`${file}.tmp`, file);
   return snapshot;
 }
+
+const median = (nums) => {
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
+
+/**
+ * Open-dataset import (ticket 09): CSV rows (header first) → one `{company, data}`
+ * per tracker company that appears in the dataset. Columns are named explicitly
+ * because dataset schemas drift; a wrong name fails with the real header list.
+ * opts: { kind, companyCol, valueCol, levelCol?, prosCol?, consCol?, currency? }
+ */
+export function aggregateDataset(rows, opts, companies) {
+  const [header, ...body] = rows;
+  const col = (name) => {
+    if (!name) return -1;
+    const i = header.indexOf(name);
+    if (i === -1) throw new Error(`Column "${name}" not in the dataset header: ${header.join(", ")}`);
+    return i;
+  };
+  const [ci, vi, li, pi, ki] = [opts.companyCol, opts.valueCol, opts.levelCol, opts.prosCol, opts.consCol].map(col);
+  const wanted = new Map(companies.map((c) => [normalizeCompanyName(c), c]).filter(([key]) => key));
+  const byCompany = new Map();
+  for (const row of body) {
+    const company = wanted.get(normalizeCompanyName(row[ci]));
+    const value = Number.parseFloat(row[vi]);
+    if (!company || !Number.isFinite(value)) continue;
+    if (!byCompany.has(company)) byCompany.set(company, []);
+    byCompany.get(company).push({ value, level: row[li], pros: row[pi]?.trim(), cons: row[ki]?.trim() });
+  }
+  return [...byCompany].map(([company, recs]) => {
+    const values = recs.map((r) => r.value);
+    if (opts.kind === "reviews") {
+      const sample = (key) => recs.map((r) => r[key]).filter(Boolean).slice(0, 3);
+      return {
+        company,
+        data: {
+          rating: Math.round((100 * values.reduce((a, b) => a + b, 0)) / values.length) / 100,
+          reviewCount: recs.length,
+          pros: sample("pros"),
+          cons: sample("cons"),
+        },
+      };
+    }
+    const data = { medianTotal: median(values), currency: opts.currency ?? "" };
+    if (li !== -1) {
+      const levels = Map.groupBy(recs.filter((r) => r.level), (r) => r.level);
+      data.levels = [...levels]
+        .map(([level, rs]) => ({ level, total: median(rs.map((r) => r.value)) }))
+        .sort((a, b) => a.level.localeCompare(b.level));
+    }
+    return { company, data };
+  });
+}

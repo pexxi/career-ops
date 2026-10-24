@@ -56,3 +56,44 @@ test("an entry without provenance (source, url, fetchedAt) or with an unknown ki
     }
     assert.equal(await readIntel(dir, "OpenAI"), null);
   }));
+
+// Ticket 09 seam: dataset import aggregates a CSV per tracker company.
+import { aggregateDataset } from "../lib/intel.mjs";
+
+test("a reviews dataset aggregates to rating, count and sample pros/cons per tracker company only", () => {
+  const rows = [
+    ["firm", "overall_rating", "pros", "cons"],
+    ["Google", "5", "smart people", ""],
+    ["Google", "3", "", "slow promos"],
+    ["Google", "4", "food", "big org"],
+    ["Initech", "1", "none", "tps reports"],
+  ];
+  const out = aggregateDataset(rows, { kind: "reviews", companyCol: "firm", valueCol: "overall_rating", prosCol: "pros", consCol: "cons" }, ["Google LLC"]);
+  assert.deepEqual(out, [
+    { company: "Google LLC", data: { rating: 4, reviewCount: 3, pros: ["smart people", "food"], cons: ["slow promos", "big org"] } },
+  ]);
+});
+
+test("a salaries dataset aggregates to median total and per-level medians", () => {
+  const rows = [
+    ["company", "level", "totalyearlycompensation"],
+    ["Google", "L4", "200000"],
+    ["Google", "L4", "220000"],
+    ["Google", "L5", "300000"],
+    ["google", "L6", "not a number"],
+  ];
+  const out = aggregateDataset(rows, { kind: "salaries", companyCol: "company", valueCol: "totalyearlycompensation", levelCol: "level", currency: "USD" }, ["Google"]);
+  assert.deepEqual(out, [
+    {
+      company: "Google",
+      data: { medianTotal: 220000, currency: "USD", levels: [{ level: "L4", total: 210000 }, { level: "L5", total: 300000 }] },
+    },
+  ]);
+});
+
+test("a column name that is not in the header fails loudly with the real headers", () => {
+  assert.throws(
+    () => aggregateDataset([["firm", "rating"]], { kind: "reviews", companyCol: "firm", valueCol: "overall_rating" }, ["X"]),
+    /overall_rating.*firm, rating/,
+  );
+});

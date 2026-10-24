@@ -603,7 +603,7 @@ function CompanyIntel({ company }: { company: string }) {
               <Stack gap={4}>
                 <Text size="sm">
                   Rating {s.data.rating ?? "—"}
-                  {s.data.reviewCount != null ? ` from ${s.data.reviewCount} reviews` : ""}
+                  {s.data.reviewCount != null ? ` from ${s.data.reviewCount.toLocaleString()} reviews` : ""}
                 </Text>
                 {(s.data.pros ?? []).length > 0 && (
                   <Text size="sm">
