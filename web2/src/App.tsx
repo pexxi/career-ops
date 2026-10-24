@@ -12,26 +12,27 @@ const PAGES = [
 
 type PageId = (typeof PAGES)[number]["id"];
 
-function pageFromHash(): PageId {
-  const hash = window.location.hash.replace("#", "") as PageId;
-  return PAGES.some((p) => p.id === hash) ? hash : "overview";
+function pageFromHash(hash: string): PageId {
+  // "#applications/active" → page "applications" (the rest is the page's own state).
+  const id = hash.replace("#", "").split("/")[0] as PageId;
+  return PAGES.some((p) => p.id === id) ? id : "overview";
 }
 
 export function App() {
-  const [page, setPage] = useState<PageId>(pageFromHash);
+  const [hash, setHash] = useState(window.location.hash);
+  const page = pageFromHash(hash);
   const [navOpen, setNavOpen] = useState(false);
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const onHash = () => setPage(pageFromHash());
+    const onHash = () => setHash(window.location.hash);
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
   const go = (id: PageId) => {
-    window.location.hash = id;
-    setPage(id);
+    window.location.hash = id; // hashchange → setHash
     setNavOpen(false);
   };
 
@@ -89,7 +90,8 @@ export function App() {
 
       <AppShell.Main>
         {page === "overview" && <OverviewPage />}
-        {page === "applications" && <ApplicationsPage />}
+        {/* Keyed on the hash: "#applications/active" → "#applications" re-reads the lens. */}
+        {page === "applications" && <ApplicationsPage key={hash} />}
         {page === "reports" && <ReportsPage />}
         {page === "system" && <SystemPage />}
       </AppShell.Main>

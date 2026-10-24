@@ -119,6 +119,21 @@ async function main() {
       await visible(page.getByText("nothing is submitted for you"));
     });
 
+    await step("Overview shows KPIs, funnel and the activity feed", async () => {
+      await visible(page.getByRole("button", { name: "Active process: 2" }));
+      await visible(page.getByText("Funnel — applications that ever reached each stage"));
+      await visible(page.locator(".recharts-bar-rectangle"));
+      await visible(page.getByText("#3 Meta — MCP Engineer"));
+      await visible(page.getByText("Interview → Rejected"));
+    });
+
+    await step("an Overview card opens Applications in that lens", async () => {
+      await page.getByRole("button", { name: "Active process: 2" }).click();
+      await visible(page.getByRole("heading", { name: "Applications" }));
+      await visible(page.getByText("2 of 4 shown"));
+      await visible(page.locator("tbody tr", { hasText: "Google" }));
+    });
+
     await step("Applications screen renders the tracker table", async () => {
       await goto("applications");
       await visible(page.getByRole("heading", { name: "Applications" }));

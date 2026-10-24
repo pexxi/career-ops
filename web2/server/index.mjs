@@ -13,6 +13,7 @@ import { locateFiles } from "../lib/paths.mjs";
 import { readTracker } from "../lib/tracker.mjs";
 import { readHistoryByRow } from "../lib/statuslog.mjs";
 import { listReports, readReport } from "../lib/reports.mjs";
+import { overview } from "../lib/overview.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 
 // Canonical states from templates/states.yml (set-status.mjs is the real
@@ -28,8 +29,8 @@ app.onError((err, c) => {
   return c.json({ error: { code, message: err.message } }, status);
 });
 
-app.get("/api/applications", async (c) => {
-  const files = await locateFiles();
+/** Tracker rows joined with their status-ledger history (newest first). */
+async function loadApplications(files) {
   const tracker = await readTracker(files.tracker);
   const historyByRow = await readHistoryByRow(files.statusLog, loadStates(files));
   const rows = tracker.rows.map((row) => {
@@ -40,7 +41,23 @@ app.get("/api/applications", async (c) => {
       lastTransition: history[0]?.date ?? row.date,
     };
   });
-  return c.json({ trackerPath: files.tracker, dataRoot: files.dataRoot, rows, warnings: tracker.warnings });
+  return { rows, warnings: tracker.warnings };
+}
+
+app.get("/api/applications", async (c) => {
+  const files = await locateFiles();
+  const { rows, warnings } = await loadApplications(files);
+  return c.json({ trackerPath: files.tracker, dataRoot: files.dataRoot, rows, warnings });
+});
+
+app.get("/api/overview", async (c) => {
+  const files = await locateFiles();
+  const { rows } = await loadApplications(files);
+  const ledger = await fs.promises.readFile(files.statusLog, "utf8").catch((err) => {
+    if (err.code === "ENOENT") return ""; // no ledger yet = no history, as readHistoryByRow treats it
+    throw err;
+  });
+  return c.json(overview(rows, ledger));
 });
 
 app.get("/api/reports", async (c) => {

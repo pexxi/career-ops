@@ -143,3 +143,46 @@ test("GET /api/reports lists reports with number, company, role, score, date, le
   assert.equal(openai.legitimacy, "High Confidence");
   assert.equal(openai.markdown, undefined, "the list must not ship every report body");
 });
+
+// Ticket 06: Overview numbers come from the same tracker + ledger, via the
+// core's cumulative-stage contract (funnel-stages.mjs).
+test("GET /api/overview returns KPIs, ever-reached funnel and newest-first activity", async () => {
+  pointAt("smoke");
+  const res = await app.request("/api/overview");
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.kpis, { deciding: 1, active: 2, everHired: 0, avgScore: 3.75 });
+  // Row 3 is Rejected now but the ledger shows it came from Interview.
+  assert.deepEqual(body.funnel, [
+    { stage: "Evaluated", count: 4 },
+    { stage: "Applied", count: 3 },
+    { stage: "Responded", count: 2 },
+    { stage: "Assessment", count: 2 },
+    { stage: "Interview", count: 2 },
+    { stage: "Offer", count: 0 },
+    { stage: "Hired", count: 0 },
+  ]);
+  assert.equal(body.activity.length, 5);
+  assert.deepEqual(body.activity[0], {
+    num: "3", company: "Meta", role: "MCP Engineer", date: "2026-09-01", from: "Interview", to: "Rejected",
+  });
+});
+
+test("a Deciding-only tracker still has a non-zero funnel (Evaluated bar)", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-overview-"));
+  try {
+    await fs.mkdir(path.join(tmp, "data"));
+    await fs.writeFile(
+      path.join(tmp, "data", "applications.md"),
+      "| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|---|---|---|---|---|---|---|---|\n" +
+        "| 1 | 2026-09-01 | A | X | 4.0/5 | Evaluated | ❌ | — | |\n| 2 | 2026-09-02 | B | Y | N/A | Evaluated | ❌ | — | |\n",
+    );
+    process.env.CAREER_OPS_ROOT = tmp;
+    const body = await (await app.request("/api/overview")).json();
+    assert.equal(body.funnel[0].count, 2);
+    assert.deepEqual(body.kpis, { deciding: 2, active: 0, everHired: 0, avgScore: 4 });
+    assert.deepEqual(body.activity, []);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});

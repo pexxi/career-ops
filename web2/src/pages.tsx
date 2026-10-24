@@ -1,6 +1,7 @@
 // Stub pages for the #01 dev shell; each is replaced by its own ticket
-// (06 Overview KPIs, 07 System).
+// (07 System).
 // 05 landed: Reports browser.
+// 06 landed: Overview KPIs + funnel.
 // 02 landed: Applications table + stage lens.
 // 03 landed: stage-focused application detail drawer.
 // 04 landed: multi-row selection, bulk state change, CSV export.
@@ -16,10 +17,12 @@ import {
   List,
   Loader,
   Modal,
+  Paper,
   Progress,
   ScrollArea,
   SegmentedControl,
   Select,
+  SimpleGrid,
   Stack,
   Table,
   Tabs,
@@ -30,6 +33,7 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
+import { BarChart } from "@mantine/charts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -51,7 +55,79 @@ function Stub({ title, blurb }: { title: string; blurb: string }) {
   );
 }
 
-export const OverviewPage = () => <Stub title="Overview" blurb="Funnel KPIs land here (ticket 06)." />;
+// --- Overview (ticket 06) ----------------------------------------------------
+
+function KpiCard({ label, value, lens }: { label: string; value: string; lens: string }) {
+  return (
+    <UnstyledButton onClick={() => (window.location.hash = `applications/${lens}`)} aria-label={`${label}: ${value}`}>
+      <Paper withBorder p="md" radius="md">
+        <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
+          {label}
+        </Text>
+        <Text fz={28} fw={700}>
+          {value}
+        </Text>
+      </Paper>
+    </UnstyledButton>
+  );
+}
+
+export function OverviewPage() {
+  const query = useQuery({ queryKey: ["applications", "overview"], queryFn: api.overview });
+  if (query.isPending) {
+    return (
+      <Center py="xl">
+        <Loader size="sm" />
+      </Center>
+    );
+  }
+  if (query.isError) {
+    const code = query.error instanceof ApiError ? query.error.code : "ERROR";
+    return <TrackerErrorState code={code} message={query.error.message} onRetry={() => void query.refetch()} />;
+  }
+  const { kpis, funnel, activity } = query.data;
+  return (
+    <Stack gap="md">
+      <Title order={2}>Overview</Title>
+      <SimpleGrid cols={{ base: 2, md: 4 }}>
+        <KpiCard label="Deciding" value={String(kpis.deciding)} lens="deciding" />
+        <KpiCard label="Active process" value={String(kpis.active)} lens="active" />
+        <KpiCard label="Ever hired" value={String(kpis.everHired)} lens="closed" />
+        <KpiCard label="Average score" value={kpis.avgScore != null ? kpis.avgScore.toFixed(2) : "—"} lens="all" />
+      </SimpleGrid>
+      <Paper withBorder p="md" radius="md">
+        <Text fw={600} mb="sm">
+          Funnel — applications that ever reached each stage
+        </Text>
+        <BarChart h={260} data={funnel} dataKey="stage" series={[{ name: "count", label: "Applications", color: "blue.6" }]} />
+      </Paper>
+      <Paper withBorder p="md" radius="md">
+        <Text fw={600} mb="sm">
+          Recent status activity
+        </Text>
+        {activity.length === 0 ? (
+          <Text c="dimmed">No transitions in the status ledger yet.</Text>
+        ) : (
+          <Table>
+            <Table.Tbody>
+              {activity.map((a, i) => (
+                <Table.Tr key={i}>
+                  <Table.Td w={110}>{a.date}</Table.Td>
+                  <Table.Td>
+                    #{a.num} {a.company} — {a.role}
+                  </Table.Td>
+                  <Table.Td>
+                    {a.from || "—"} → {a.to}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        )}
+      </Paper>
+    </Stack>
+  );
+}
 
 // --- Applications (ticket 02) ------------------------------------------------
 
@@ -634,7 +710,11 @@ function BulkStatusBody({
 
 export function ApplicationsPage() {
   const query = useQuery({ queryKey: ["applications"], queryFn: api.applications });
-  const [lens, setLens] = useState<string>(DEFAULT_STAGE);
+  // "#applications/active" (an Overview card) opens in that lens.
+  const [lens, setLens] = useState<string>(() => {
+    const fromHash = window.location.hash.split("/")[1];
+    return LENSES.some((l) => l.value === fromHash) ? fromHash : DEFAULT_STAGE;
+  });
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
   // Multi-row selection (ticket 04) and the bulk confirm modal.

@@ -45,6 +45,12 @@ export interface ReportMeta {
   archetype: string;
 }
 
+export interface OverviewPayload {
+  kpis: { deciding: number; active: number; everHired: number; avgScore: number | null };
+  funnel: Array<{ stage: string; count: number }>;
+  activity: Array<{ num: string; company: string; role: string; date: string; from: string; to: string }>;
+}
+
 export interface ReportsPayload {
   reportsDir: string;
   reports: Array<ReportMeta & { num: string }>;
@@ -74,6 +80,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   applications: () => request<ApplicationsPayload>("/api/applications"),
+  overview: () => request<OverviewPayload>("/api/overview"),
   reports: () => request<ReportsPayload>("/api/reports"),
   report: (num: string | number, signal?: AbortSignal) =>
     request<ReportPayload>(`/api/reports/${num}`, { signal }),
