@@ -74,6 +74,7 @@ async function main() {
   };
   delete env.CAREER_OPS_DATA_DIR;
   delete env.CAREER_OPS_TRACKER;
+  delete env.CAREER_OPS_PROFILE;
 
   const server = spawn(process.execPath, ["server/index.mjs"], {
     cwd: web2Root,
@@ -297,6 +298,28 @@ async function main() {
       assert.equal(lines.length, 5, `expected header + 4 rows, got ${lines.length}: ${csv}`);
       assert.ok(csv.includes("OpenAI"), "a visible row is missing from the export");
       assert.ok(csv.includes("Responded"), "the exported status is stale");
+    });
+
+    // --- Profile page + Profile apply (ticket 10) -----------------------------
+    await step("Profile page shows parsed profile.yml and marks missing files", async () => {
+      await goto("profile");
+      await visible(page.getByRole("heading", { name: "Profile" }));
+      await visible(page.getByText("Test Person"));
+      await visible(page.getByRole("cell", { name: "AI Engineering Lead" }));
+      await visible(page.getByRole("tab", { name: /voice-dna\.md.*missing/ }));
+    });
+
+    await step("Profile apply previews, then writes only the confirmed line", async () => {
+      const yml = path.join(tmp, "config", "profile.yml");
+      const original = await fs.readFile(yml, "utf8");
+      await page.getByLabel("Patch").fill('@@ -17,1 +17,1 @@\n-  minimum: "EUR 100K"\n+  minimum: "EUR 105K"');
+      assert.ok(await page.getByRole("button", { name: "Apply", exact: true }).isDisabled(), "Apply enabled before preview");
+      await page.getByRole("button", { name: "Preview" }).click();
+      await visible(page.getByText(/Applies cleanly to/));
+      assert.equal(await fs.readFile(yml, "utf8"), original, "preview wrote the file");
+      await page.getByRole("button", { name: "Apply", exact: true }).click();
+      await visible(page.getByText("Profile updated"));
+      assert.equal(await fs.readFile(yml, "utf8"), original.replace("EUR 100K", "EUR 105K"));
     });
 
     // --- Nothing crashed along the way ---------------------------------------

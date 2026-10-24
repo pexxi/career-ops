@@ -14,13 +14,14 @@ const { app } = await import("../server/index.mjs");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = (name) => path.join(here, "fixtures", name);
 
-const envKeys = ["CAREER_OPS_ROOT", "CAREER_OPS_DATA_DIR", "CAREER_OPS_TRACKER", "WEB2_DATA_DIR"];
+const envKeys = ["CAREER_OPS_ROOT", "CAREER_OPS_DATA_DIR", "CAREER_OPS_TRACKER", "CAREER_OPS_PROFILE", "WEB2_DATA_DIR"];
 let saved = {};
 
 beforeEach(() => {
   saved = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
   delete process.env.CAREER_OPS_DATA_DIR;
   delete process.env.CAREER_OPS_TRACKER;
+  delete process.env.CAREER_OPS_PROFILE;
 });
 
 afterEach(() => {
@@ -227,6 +228,49 @@ test("GET /api/intel returns the snapshot for a tracker company spelling, null w
     assert.equal(body.snapshot, null);
     const bad = await app.request("/api/intel");
     assert.equal(bad.status, 400);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// Ticket 10: the Profile page's read + Profile apply write path.
+const post = (url, body) =>
+  app.request(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+test("GET /api/profile returns the four files, a missing one as exists:false, and parsed profile.yml", async () => {
+  pointAt("profile");
+  const res = await app.request("/api/profile");
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.files.map((f) => [f.name, f.exists]), [["profile", true], ["cv", true], ["modeProfile", true], ["voice", false]]);
+  assert.equal(body.parsed.candidate.full_name, "Test Person");
+  assert.equal(body.parsed.target_roles.archetypes[0].fit, "primary");
+});
+
+test("POST /api/profile/apply writes a confirmed patch; dryRun and a bad file write nothing", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-profile-"));
+  try {
+    await fs.cp(fixtureRoot("profile"), tmp, { recursive: true });
+    process.env.CAREER_OPS_ROOT = tmp;
+    const yml = path.join(tmp, "config", "profile.yml");
+    const original = await fs.readFile(yml, "utf8");
+    const patch = "@@ -17,1 +17,1 @@\n-  minimum: \"EUR 100K\"\n+  minimum: \"EUR 105K\"\n";
+
+    let res = await post("/api/profile/apply", { file: "profile", patch, dryRun: true });
+    assert.equal(res.status, 200);
+    assert.match((await res.json()).after, /EUR 105K/);
+    assert.equal(await fs.readFile(yml, "utf8"), original, "dry run wrote the file");
+
+    res = await post("/api/profile/apply", { file: "../../etc/passwd", patch });
+    assert.equal(res.status, 400);
+    res = await post("/api/profile/apply", { file: "profile", patch: "@@ -1,1 +1,1 @@\n-nope\n+x\n" });
+    assert.equal(res.status, 409);
+    assert.equal((await res.json()).error.code, "PATCH_REJECTED");
+    assert.equal(await fs.readFile(yml, "utf8"), original, "a rejected patch wrote the file");
+
+    res = await post("/api/profile/apply", { file: "profile", patch });
+    assert.equal(res.status, 200);
+    assert.equal(await fs.readFile(yml, "utf8"), original.replace("EUR 100K", "EUR 105K"));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { AppShell, Burger, Group, NavLink, Text, ActionIcon, useMantineColorScheme, ScrollArea } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
-import { IconSun, IconMoon, IconRefresh, IconGauge, IconTable, IconFileText, IconShieldCheck } from "@tabler/icons-react";
+import { IconSun, IconMoon, IconRefresh, IconGauge, IconTable, IconFileText, IconShieldCheck, IconUser } from "@tabler/icons-react";
 
 const PAGES = [
   { id: "overview", label: "Overview", icon: IconGauge },
   { id: "applications", label: "Applications", icon: IconTable },
   { id: "reports", label: "Reports", icon: IconFileText },
   { id: "system", label: "System", icon: IconShieldCheck },
+  { id: "profile", label: "Profile", icon: IconUser },
 ] as const;
 
 type PageId = (typeof PAGES)[number]["id"];
@@ -94,6 +95,7 @@ export function App() {
         {page === "applications" && <ApplicationsPage key={hash} />}
         {page === "reports" && <ReportsPage />}
         {page === "system" && <SystemPage />}
+        {page === "profile" && <ProfilePage />}
       </AppShell.Main>
     </AppShell>
   );
@@ -101,3 +103,4 @@ export function App() {
 
 // Lazy page references resolved in this single-file shell to avoid a router dep.
 import { OverviewPage, ApplicationsPage, ReportsPage, SystemPage } from "./pages";
+import { ProfilePage } from "./profile";

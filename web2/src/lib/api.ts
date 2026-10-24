@@ -69,6 +69,39 @@ export interface IntelPayload {
   snapshot: { company: string; sources: IntelEntry[] } | null;
 }
 
+export interface ProfileFile {
+  name: "profile" | "cv" | "modeProfile" | "voice";
+  path: string;
+  exists: boolean;
+  content: string;
+}
+
+/** The parts of config/profile.yml the Profile page shows; everything is optional. */
+export interface ProfileYaml {
+  candidate?: Record<string, string>;
+  target_roles?: {
+    primary?: string[];
+    archetypes?: Array<{ name?: string; level?: string; fit?: string }>;
+  };
+  compensation?: Record<string, string>;
+  work_preferences?: Record<string, unknown>;
+  location?: Record<string, unknown>;
+}
+
+export interface ProfilePayload {
+  files: ProfileFile[];
+  parsed: ProfileYaml | null;
+  parseError: string | null;
+}
+
+export interface ApplyResult {
+  name: string;
+  path: string;
+  before: string;
+  after: string;
+  written: boolean;
+}
+
 export interface SystemCheck {
   id: string;
   label: string;
@@ -120,6 +153,13 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const api = {
   applications: () => request<ApplicationsPayload>("/api/applications"),
   intel: (company: string) => request<IntelPayload>(`/api/intel?company=${encodeURIComponent(company)}`),
+  profile: () => request<ProfilePayload>("/api/profile"),
+  applyProfile: (file: string, patch: string, dryRun: boolean) =>
+    request<ApplyResult>("/api/profile/apply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ file, patch, dryRun }),
+    }),
   system: () => request<SystemPayload>("/api/system"),
   overview: () => request<OverviewPayload>("/api/overview"),
   reports: () => request<ReportsPayload>("/api/reports"),

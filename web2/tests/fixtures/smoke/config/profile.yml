@@ -1,0 +1,17 @@
+# Fixture profile — comments must survive a Profile apply.
+candidate:
+  full_name: "Test Person"
+  location: "Helsinki, Finland"
+
+target_roles:
+  primary:
+    - "Technical Lead"
+  archetypes:
+    # primary lane
+    - name: "AI Engineering Lead"
+      level: "Lead"
+      fit: "primary"
+
+compensation:
+  target_range: "EUR 110K-130K"
+  minimum: "EUR 100K"

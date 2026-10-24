@@ -15,6 +15,7 @@ import { readHistoryByRow } from "../lib/statuslog.mjs";
 import { listReports, readReport } from "../lib/reports.mjs";
 import { overview } from "../lib/overview.mjs";
 import { intelDir, readIntel } from "../lib/intel.mjs";
+import { applyProfilePatch, readProfile } from "../lib/profile.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 import { parseStatusLog } from "../../funnel-velocity.mjs";
 
@@ -131,6 +132,21 @@ app.get("/api/intel", async (c) => {
   const company = c.req.query("company")?.trim();
   if (!company) return c.json({ error: { code: "USAGE", message: "company query parameter is required" } }, 400);
   return c.json({ snapshot: await readIntel(intelDir(), company) });
+});
+
+// Candidate profile (ticket 10). The only write is Profile apply: a unified
+// patch to one NAMED profile file, applied strictly where its hunks say.
+app.get("/api/profile", async (c) => c.json(await readProfile()));
+
+app.post("/api/profile/apply", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  try {
+    return c.json(await applyProfilePatch(body?.file, body?.patch, { dryRun: body?.dryRun === true }));
+  } catch (err) {
+    if (err.code === "USAGE") return c.json({ error: { code: err.code, message: err.message } }, 400);
+    if (err.code === "PATCH_REJECTED") return c.json({ error: { code: err.code, message: err.message } }, 409);
+    throw err;
+  }
 });
 
 // System health (ticket 07): each file the app reads is ok, missing (ENOENT)

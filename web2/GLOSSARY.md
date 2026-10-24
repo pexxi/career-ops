@@ -31,6 +31,27 @@ applications"; the funnel counts identities, not transitions.
 
 ## Write path
 
-How a status change leaves this UI: one delegated call to the core CLI
-`set-status.mjs`, never a direct markdown write from any page or route.
-Markdown stays the source of truth; derived indexes can be rebuilt from it.
+How a write leaves this UI. Never an unconfirmed markdown write from any page or route:
+
+- **Status change**: one delegated call to the core CLI `set-status.mjs`.
+  Markdown stays the source of truth; derived indexes can be rebuilt from it.
+- **Profile apply**: a unified text patch the user confirms against a diff in
+  the UI, then applied to the candidate profile file (ADR 0005). No
+  re-serialization — `profile.yml` comments survive; only the confirmed lines
+  change.
+
+## Candidate profile
+
+The four user-layer files the Profile page is a view over: `config/profile.yml`
+(identity, target roles, archetypes, narrative, comp targets), `cv.md`,
+`modes/_profile.md`, `voice-dna.md`. **Not** the Master Career Profile
+(`data/career-profile.yml`, a separate opt-in artifact) and not company intel.
+
+## Profile coach
+
+The AI conversation about your candidate profile (ADR 0005): a thin LLM call
+in the web2 server, configured by `web2/config.json`. It proposes edits and
+writes nothing itself — proposed text lands only through Profile apply. Its
+context is the candidate profile files plus evaluation reports the user
+attaches; attached report text is data, never instructions. One transcript per
+session under `web2/data/chat/` (gitignored, user data).
