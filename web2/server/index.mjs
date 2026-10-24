@@ -11,45 +11,29 @@ import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { locateFiles } from "../lib/paths.mjs";
 import { readTracker } from "../lib/tracker.mjs";
-import { readStatusLog, historyFor } from "../lib/statuslog.mjs";
-import { listReports, readReport } from "../lib/reports.mjs";
-import { computeStats } from "../lib/stats.mjs";
+import { readHistoryByRow } from "../lib/statuslog.mjs";
+import { readReport } from "../lib/reports.mjs";
+import { loadCanonicalStates } from "../../tracker-utils.mjs";
 
-// Canonical states — mirrored from templates/states.yml (set-status.mjs is the
-// real validator; this list only rejects obviously-bad requests early).
-const STATES = [
-  "Evaluated",
-  "Applied",
-  "Responded",
-  "Assessment",
-  "Interview",
-  "Offer",
-  "Hired",
-  "Rejected",
-  "Discarded",
-  "SKIP",
-];
+// Canonical states from templates/states.yml (set-status.mjs is the real
+// validator; this only rejects obviously-bad requests early).
+const loadStates = (files) => loadCanonicalStates(files.statesYml);
 
 const app = new Hono();
 export { app };
 
 app.onError((err, c) => {
   const status = err.code === "ENOENT" ? 404 : 500;
-  const code = err.code === "ENOENT" ? "ENOENT" : err.code === "EBADTRACKER" ? "EBADTRACKER" : err.code || "ERROR";
+  const code = err.code || "ERROR";
   return c.json({ error: { code, message: err.message } }, status);
 });
 
 app.get("/api/applications", async (c) => {
   const files = await locateFiles();
   const tracker = await readTracker(files.tracker);
-  let logRows = [];
-  try {
-    logRows = await readStatusLog(files.statusLog);
-  } catch {
-    // No ledger yet — the tracker alone still drives the UI.
-  }
+  const historyByRow = await readHistoryByRow(files.statusLog, loadStates(files));
   const rows = tracker.rows.map((row) => {
-    const history = historyFor(logRows, row.num);
+    const history = historyByRow.get(row.num) ?? [];
     return {
       ...row,
       history,
@@ -57,12 +41,6 @@ app.get("/api/applications", async (c) => {
     };
   });
   return c.json({ trackerPath: files.tracker, dataRoot: files.dataRoot, rows, warnings: tracker.warnings });
-});
-
-app.get("/api/reports", async (c) => {
-  const files = await locateFiles();
-  const reports = await listReports(files.reportsDir);
-  return c.json({ reports, warnings: [] });
 });
 
 app.get("/api/reports/:num", async (c) => {
@@ -75,18 +53,6 @@ app.get("/api/reports/:num", async (c) => {
   return c.json({ report });
 });
 
-app.get("/api/stats", async (c) => {
-  const files = await locateFiles();
-  const tracker = await readTracker(files.tracker);
-  let logRows = [];
-  try {
-    logRows = await readStatusLog(files.statusLog);
-  } catch {
-    // optional file
-  }
-  return c.json(computeStats(tracker.rows, logRows));
-});
-
 app.post("/api/status", async (c) => {
   const body = await c.req.json().catch(() => null);
   const num = Number.parseInt(body?.num, 10);
@@ -95,13 +61,11 @@ app.post("/api/status", async (c) => {
   if (!Number.isInteger(num) || num <= 0) {
     return c.json({ error: { code: "USAGE", message: "num must be a positive tracker row number" } }, 400);
   }
-  if (!STATES.includes(state)) {
-    return c.json(
-      { error: { code: "USAGE", message: `state must be one of ${STATES.join(", ")}` } },
-      400,
-    );
-  }
   const files = await locateFiles();
+  const labels = loadStates(files).map((s) => s.label);
+  if (!labels.includes(state)) {
+    return c.json({ error: { code: "USAGE", message: `state must be one of ${labels.join(", ")}` } }, 400);
+  }
   // --row, never a bare "#N": the bare numeric selector is ambiguous once the
   // tracker's row IDs and its report links have diverged (the core guard
   // rejects it on such rows), and the drawer is always addressing a row.
@@ -138,37 +102,6 @@ app.post("/api/status", async (c) => {
   return c.json({ ok: true, result: payload ?? {} });
 });
 
-app.get("/api/system", async (c) => {
-  const files = await locateFiles();
-  const checks = {};
-  const checkFile = async (label, file) => {
-    try {
-      await fs.promises.access(file, fs.constants.R_OK);
-      checks[label] = { status: "ok", path: file };
-    } catch (err) {
-      checks[label] = {
-        status: err.code === "ENOENT" ? "missing" : "error",
-        path: file,
-        message: err.message,
-      };
-    }
-  };
-  await checkFile("tracker", files.tracker);
-  await checkFile("statusLog", files.statusLog);
-  try {
-    const names = await fs.promises.readdir(files.reportsDir);
-    checks.reports = { status: "ok", path: files.reportsDir, count: names.filter((f) => f.endsWith(".md")).length };
-  } catch (err) {
-    checks.reports = { status: err.code === "ENOENT" ? "missing" : "error", path: files.reportsDir, message: err.message };
-  }
-  return c.json({
-    dataRoot: files.dataRoot,
-    repoRoot: files.repoRoot,
-    node: process.version,
-    checks,
-  });
-});
-
 // --- Production static SPA (dev: Vite serves the frontend instead) ----------
 const distDir = path.join(import.meta.dirname, "..", "dist");
 if (fs.existsSync(distDir)) {
@@ -184,7 +117,7 @@ const isEntrypoint =
 
 if (isEntrypoint) {
   const port = Number(process.env.WEB2_PORT ?? (process.argv.includes("--prod") ? 3001 : 4001));
-  serve({ fetch: app.fetch, port }, (info) => {
+  serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
     console.log(`web2 API listening on http://127.0.0.1:${info.port}`);
   });
 }

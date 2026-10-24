@@ -22,6 +22,7 @@ import {
   TextInput,
   Timeline,
   Title,
+  UnstyledButton,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -79,12 +80,11 @@ function SortableTh({
 }) {
   const active = sort.key === sortKey;
   return (
-    <Table.Th
-      onClick={() => onSort(sortKey)}
-      style={{ cursor: "pointer", userSelect: "none" }}
-    >
-      {label}
-      {active ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+    <Table.Th aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+      <UnstyledButton onClick={() => onSort(sortKey)} fw={700} fz="sm">
+        {label}
+        {active ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+      </UnstyledButton>
     </Table.Th>
   );
 }
@@ -203,7 +203,6 @@ function StatusChanger({ row }: { row: AppRow }) {
     onSuccess: (_data, vars) => {
       // Table + drawer re-derive from the invalidated tracker payload.
       queryClient.invalidateQueries({ queryKey: ["applications"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
       notifications.show({
         title: `Row ${row.num} status changed`,
         message: `Now ${vars.state}${vars.note ? ` — "${vars.note}"` : ""}`,
@@ -519,8 +518,6 @@ export function ApplicationsPage() {
   );
 }
 
-export function ReportsPage(_props: { reportOpener: unknown }) {
-  return <Stub title="Reports" blurb="Report browser lands here (ticket 05)." />;
-}
+export const ReportsPage = () => <Stub title="Reports" blurb="Report browser lands here (ticket 05)." />;
 
 export const SystemPage = () => <Stub title="System" blurb="System health lands here (ticket 07)." />;

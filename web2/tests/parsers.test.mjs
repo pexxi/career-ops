@@ -1,11 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTracker, extractReportNum, extractCellUrl, parseScoreCell } from "../lib/tracker.mjs";
-import { parseStatusLog, historyFor, lastTransitionMap } from "../lib/statuslog.mjs";
-import { computeStats, FUNNEL_STAGES } from "../lib/stats.mjs";
+import path from "node:path";
+import { parseTracker, extractReportNum, parseScoreCell } from "../lib/tracker.mjs";
+import { historyByRow } from "../lib/statuslog.mjs";
+import { loadCanonicalStates } from "../../tracker-utils.mjs";
 import { stageOfStatus, rowsInStage } from "../lib/stage.mjs";
 import { parseMachineSummaryFields } from "../lib/reportfields.mjs";
 import { parseReportMeta } from "../lib/reports.mjs";
+
+const STATES = loadCanonicalStates(path.join(import.meta.dirname, "..", "..", "templates", "states.yml"));
 
 const TRACKER = `# Applications Tracker
 
@@ -49,11 +52,6 @@ test("extractReportNum handles padded and link forms", () => {
   assert.equal(extractReportNum("—"), null);
 });
 
-test("extractCellUrl unwraps links", () => {
-  assert.equal(extractCellUrl("[ashby](https://jobs.ashbyhq.com/openai/x)"), "https://jobs.ashbyhq.com/openai/x");
-  assert.equal(extractCellUrl("https://example.com"), "https://example.com");
-});
-
 test("parseScoreCell sentinels", () => {
   assert.deepEqual(parseScoreCell("N/A"), { score: null, sentinel: "N/A" });
   assert.deepEqual(parseScoreCell("—"), { score: null, sentinel: "—" });
@@ -62,46 +60,32 @@ test("parseScoreCell sentinels", () => {
 
 const LOG = [
   "1\t2026-08-06\tEvaluated\tApplied\tset-status\t",
-  "1\t2026-08-07\tApplied\tInterview\tset-status\t",
+  "1\t2026-08-07\tApplied\tInterview\tset-status\tloop booked",
   "not-a-row\t2026-08-07\tx\ty\tz\t",
+  "12x\t2026-08-07\tApplied\tInterview\tset-status\t",
   "3\t2026-08-01\t-\tEvaluated\tmanual\t",
 ].join("\n");
 
-test("parseStatusLog keeps numeric-keyed rows only", () => {
-  const rows = parseStatusLog(LOG);
-  assert.equal(rows.length, 3);
-  assert.equal(rows[0].num, "1");
-});
-
-test("historyFor returns newest first for one row", () => {
-  const history = historyFor(parseStatusLog(LOG), 1);
+test("historyByRow keeps valid rows only, newest first, with notes", () => {
+  const byRow = historyByRow(LOG, STATES);
+  assert.deepEqual([...byRow.keys()].sort(), ["1", "3"]);
+  const history = byRow.get("1");
   assert.equal(history.length, 2);
   assert.equal(history[0].to, "Interview");
+  assert.equal(history[0].note, "loop booked");
   assert.equal(history[1].to, "Applied");
 });
 
-test("lastTransitionMap picks the newest per row", () => {
-  const map = lastTransitionMap(parseStatusLog(LOG));
-  assert.equal(map.get("1").date, "2026-08-07");
-  assert.equal(map.get("1").to, "Interview");
-});
-
-test("computeStats honest ever-reached funnel", () => {
-  const tracker = parseTracker(TRACKER);
-  const logRows = parseStatusLog(LOG);
-  const stats = computeStats(tracker.rows, logRows);
-  assert.equal(stats.totalRows, 2);
-  const applied = stats.funnel.find((f) => f.stage === "Applied");
-  const interview = stats.funnel.find((f) => f.stage === "Interview");
-  assert.equal(applied.count, 1); // row 1 ever applied
-  assert.equal(interview.count, 1); // row 1 reached interview
-  assert.equal(stats.statusCounts.Rejected, 1);
-});
-
-test("computeStats funnels rows with no ledger from current status", () => {
-  const stats = computeStats(parseTracker(TRACKER).rows, []);
-  const evaluated = stats.funnel.find((f) => f.stage === "Evaluated");
-  assert.equal(evaluated.count, 2);
+test("historyByRow honors retractions and corrections like the core", () => {
+  const log = [
+    LOG,
+    "1\t2026-08-08\tInterview\t-\tset-status\tnever happened",
+    "1\t2026-08-05\tEvaluated\tApplied\tcorrection\twrong day",
+  ].join("\n");
+  const history = historyByRow(log, STATES).get("1");
+  assert.equal(history.length, 1);
+  assert.equal(history[0].to, "Applied");
+  assert.equal(history[0].date, "2026-08-05");
 });
 
 test("stageOfStatus maps the lifecycle", () => {
@@ -109,6 +93,7 @@ test("stageOfStatus maps the lifecycle", () => {
   assert.equal(stageOfStatus("Interview"), "active");
   assert.equal(stageOfStatus("Rejected"), "closed");
   assert.equal(stageOfStatus("Hired"), "closed");
+  assert.equal(stageOfStatus("Offer"), "active");
 });
 
 test("rowsInStage filters the lens", () => {

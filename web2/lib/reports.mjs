@@ -2,6 +2,7 @@
 // markdown is streamed to the client on demand.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parseScoreCell } from "./tracker.mjs";
 
 const FIELD_RE = (name) => new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`);
 
@@ -30,8 +31,7 @@ export function parseReportMeta(md) {
       const m = re.exec(line.trim());
       if (m && !meta[field]) {
         if (field === "score") {
-          const parsed = /^([\d.]+)\s*\/\s*5$/.exec(m[1].trim());
-          meta.score = parsed ? Number.parseFloat(parsed[1]) : null;
+          meta.score = parseScoreCell(m[1]).score;
         } else {
           meta[field] = m[1].trim();
         }
@@ -43,17 +43,6 @@ export function parseReportMeta(md) {
 
 export function padNum(n) {
   return String(n).padStart(3, "0");
-}
-
-export async function listReports(reportsDirPath) {
-  const names = await fs.readdir(reportsDirPath);
-  const reports = [];
-  for (const name of names.filter((f) => f.endsWith(".md"))) {
-    const md = await fs.readFile(path.join(reportsDirPath, name), "utf8");
-    reports.push({ file: name, ...parseReportMeta(md) });
-  }
-  reports.sort((a, b) => (a.file < b.file ? -1 : 1));
-  return reports;
 }
 
 export async function readReport(reportsDirPath, num) {

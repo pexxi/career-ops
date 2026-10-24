@@ -49,37 +49,6 @@ export interface ReportPayload {
   report: ReportMeta & { markdown: string };
 }
 
-export interface ReportListItem extends ReportMeta {}
-
-export interface FunnelStage {
-  stage: string;
-  count: number;
-}
-
-export interface Stats {
-  totalRows: number;
-  statusCounts: Record<string, number>;
-  funnel: FunnelStage[];
-  everApplied: number;
-  everHired: number;
-  avgScore: number | null;
-  recentActivity: HistoryEntry[];
-}
-
-export interface SystemCheck {
-  status: "ok" | "missing" | "error";
-  path: string;
-  message?: string;
-  count?: number;
-}
-
-export interface SystemInfo {
-  dataRoot: string;
-  repoRoot: string;
-  node: string;
-  checks: Record<string, SystemCheck>;
-}
-
 export class ApiError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -100,11 +69,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   applications: () => request<ApplicationsPayload>("/api/applications"),
-  reportsList: () => request<{ reports: ReportListItem[] }>("/api/reports"),
   report: (num: string | number, signal?: AbortSignal) =>
     request<ReportPayload>(`/api/reports/${num}`, { signal }),
-  stats: () => request<Stats>("/api/stats"),
-  system: () => request<SystemInfo>("/api/system"),
   setStatus: (num: string | number, state: string, note?: string) =>
     request<{ ok: boolean }>("/api/status", {
       method: "POST",

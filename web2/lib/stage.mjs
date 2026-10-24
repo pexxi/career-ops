@@ -14,12 +14,15 @@ const STATUS_TO_STAGE = {
   Responded: "active",
   Assessment: "active",
   Interview: "active",
-  Offer: "closed",
+  Offer: "active",
   Hired: "closed",
   Rejected: "closed",
   Discarded: "closed",
   SKIP: "closed",
 };
+
+/** The canonical states in lifecycle order (same set as templates/states.yml, parity-tested). */
+export const CANONICAL_STATES = Object.keys(STATUS_TO_STAGE);
 
 export function stageOfStatus(status) {
   return STATUS_TO_STAGE[status] ?? "closed";
@@ -30,17 +33,12 @@ export function rowsInStage(rows, stage) {
   return rows.filter((r) => stageOfStatus(r.status) === stage);
 }
 
-// Statuses that still need a human decision, newest-relevant-first grouping
-// for Overview KPIs.
-export const ACTIVE_STATUSES = ["Applied", "Responded", "Assessment", "Interview"];
-export const DECIDING_STATUSES = ["Evaluated"];
-
 /**
  * drawerContent(row, fields) — the stage-focus model behind the detail drawer
  * (ticket 03, ADR 0003). One fixed shape; fields outside the row's CURRENT
  * stage stay undefined, so a stage can never leak into the card: deciding
  * never shows process history, active never shows decision content, closed
- * collapses to one outcome line. `fields` is the client-parsed Machine Summary
+ * collapses to one outcome line (no posting link). `fields` is the client-parsed Machine Summary
  * (see lib/reportfields.mjs) — a deciding-lane input, ignored by the other
  * stages. `row.history` is newest-first, per historyFor().
  */
@@ -48,7 +46,7 @@ export function drawerContent(row, fields = {}) {
   const stage = stageOfStatus(row.status);
   const model = {
     stage,
-    url: row.url ?? "",
+    url: stage === "closed" ? undefined : (row.url ?? ""),
     legitimacy: undefined,
     finalDecision: undefined,
     hardStops: undefined,

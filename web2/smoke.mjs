@@ -46,14 +46,14 @@ async function waitForServer(base, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${base}/api/system`);
+      const res = await fetch(`${base}/api/applications`);
       if (res.ok) return;
     } catch {
       // not up yet
     }
     await new Promise((r) => setTimeout(r, 150));
   }
-  throw new Error(`server did not answer ${base}/api/system within ${timeoutMs}ms`);
+  throw new Error(`server did not answer ${base}/api/applications within ${timeoutMs}ms`);
 }
 
 async function main() {

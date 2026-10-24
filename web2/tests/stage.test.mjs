@@ -5,21 +5,22 @@
 // and which must NOT appear", so the React layer only renders, never decides.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stageOfStatus, rowsInStage, drawerContent, STAGE_ORDER, DEFAULT_STAGE } from "../lib/stage.mjs";
+import path from "node:path";
+import { stageOfStatus, rowsInStage, drawerContent, STAGE_ORDER, DEFAULT_STAGE, CANONICAL_STATES } from "../lib/stage.mjs";
+import { loadCanonicalStates } from "../../tracker-utils.mjs";
 
-// templates/states.yml — the canonical set, mirrored in the server's STATES list.
-const ALL_STATES = [
-  "Evaluated",
-  "Applied",
-  "Responded",
-  "Assessment",
-  "Interview",
-  "Offer",
-  "Hired",
-  "Rejected",
-  "Discarded",
-  "SKIP",
-];
+// templates/states.yml is the source of truth; the stage map mirrors it.
+const ALL_STATES = loadCanonicalStates(
+  path.join(import.meta.dirname, "..", "..", "templates", "states.yml"),
+).map((s) => s.label);
+
+test("the stage map mirrors templates/states.yml exactly (parity)", () => {
+  assert.deepEqual([...CANONICAL_STATES].sort(), [...ALL_STATES].sort());
+});
+
+test("Offer is a live decision: active, not closed", () => {
+  assert.equal(stageOfStatus("Offer"), "active");
+});
 
 test("every canonical state maps to a stage in STAGE_ORDER (exhaustive)", () => {
   for (const state of ALL_STATES) {
@@ -119,12 +120,13 @@ test("closed condenses to one outcome line + notes", () => {
   assert.equal(model.notes, "after interview");
   assert.equal(model.history, undefined);
   assert.equal(model.finalDecision, undefined);
+  assert.equal(model.url, undefined); // closed carries no posting link
 });
 
 test("closed without a ledger falls back to the current status as the outcome", () => {
-  const model = drawerContent({ ...DECIDING_ROW, status: "Offer", history: [] }, FIELDS);
+  const model = drawerContent({ ...DECIDING_ROW, status: "Hired", history: [] }, FIELDS);
   assert.equal(model.stage, "closed");
-  assert.equal(model.outcome, "Offer");
+  assert.equal(model.outcome, "Hired");
 });
 
 test("an unknown status falls back to the closed bucket, not a crash", () => {

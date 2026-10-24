@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell, Burger, Group, NavLink, Text, ActionIcon, useMantineColorScheme, Menu, Loader, ScrollArea } from "@mantine/core";
+import { AppShell, Burger, Group, NavLink, Text, ActionIcon, useMantineColorScheme, ScrollArea } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconSun, IconMoon, IconRefresh, IconGauge, IconTable, IconFileText, IconShieldCheck } from "@tabler/icons-react";
 
@@ -78,11 +78,9 @@ export function App() {
 
       <AppShell.Footer>
         <Group h="100%" px="md" justify="space-between" gap="xs">
-          <Menu>
-            <Menu.Target>
-              <Loader size={16} />
-            </Menu.Target>
-          </Menu>
+          <Text size="xs" c="dimmed">
+            loopback only (127.0.0.1)
+          </Text>
           <Text size="xs" c="dimmed" visibleFrom="xs">
             local-first · markdown is the source of truth · nothing is submitted for you
           </Text>
@@ -92,7 +90,7 @@ export function App() {
       <AppShell.Main>
         {page === "overview" && <OverviewPage />}
         {page === "applications" && <ApplicationsPage />}
-        {page === "reports" && <ReportsPage reportOpener={{}} />}
+        {page === "reports" && <ReportsPage />}
         {page === "system" && <SystemPage />}
       </AppShell.Main>
     </AppShell>

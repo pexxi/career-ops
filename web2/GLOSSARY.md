@@ -20,7 +20,8 @@ Assessment, Interview, Offer, Hired, Rejected, Discarded, SKIP.
 
 The UI lens over the lifecycle: which facts about an Application matter right
 now. Defined in `lib/stage.mjs` — `deciding` (score/decision/gaps),
-`active` (history/follow-ups), `closed` (outcome recorded), `all`.
+`active` (history/follow-ups; Offer counts here, since it is still a live
+decision), `closed` (outcome recorded), `all`.
 
 ## Funnel
 

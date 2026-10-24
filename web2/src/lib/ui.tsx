@@ -1,6 +1,7 @@
 import { Badge } from "@mantine/core";
+export { CANONICAL_STATES } from "../../lib/stage.mjs";
 
-/** Canonical-state colors — Exhaustive map over templates/states.yml states. */
+/** Display colors per canonical state; an unknown state falls back to gray. */
 export const STATUS_COLORS: Record<string, string> = {
   Evaluated: "blue",
   Applied: "cyan",
@@ -25,5 +26,3 @@ export function StatusBadge({ status }: { status: string }) {
     </Badge>
   );
 }
-
-export const CANONICAL_STATES = Object.keys(STATUS_COLORS);

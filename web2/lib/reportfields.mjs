@@ -20,12 +20,9 @@ export function parseMachineSummaryFields(md) {
     if (keyMatch) {
       const key = keyMatch[1];
       const value = keyMatch[2].trim().replace(/^"|"$/g, "");
-      if (value && key === "final_decision") {
+      if (key === "final_decision") {
         fields[key] = value;
         currentList = null;
-      } else if (key === "final_decision") {
-        // bare key with inline quote artifacts stripped to empty
-        fields[key] = value;
       } else if (["hard_stops", "soft_gaps", "top_reasons"].includes(key)) {
         currentList = key;
       }
@@ -36,7 +33,3 @@ export function parseMachineSummaryFields(md) {
   return fields;
 }
 
-// Header facts (Score/Legitimacy/Archetype) parse in lib/reports.mjs.
-export function extractImplementerFields(md) {
-  return parseMachineSummaryFields(md);
-}
