@@ -198,6 +198,46 @@ async function main() {
       assert.match(row, /\| Interview \|/, `row 4 status not Interview: ${row}`);
     });
 
+    // --- Bulk actions + CSV export (ticket 04) -------------------------------
+    await step("multi-select reports the per-lens count in the header", async () => {
+      await goto("applications");
+      await page.getByText("All", { exact: true }).click();
+      await page.getByLabel("Select row 1").check();
+      await page.getByLabel("Select row 4").check();
+      await visible(page.getByText("2 selected"));
+    });
+
+    await step("bulk change runs row by row and both rows land on disk", async () => {
+      await page.getByRole("button", { name: "Change status…" }).click();
+      await page.getByRole("combobox", { name: "New status" }).click();
+      await page.getByRole("option", { name: "Responded", exact: true }).click();
+      await page.getByLabel("Note (optional)").fill("smoke bulk");
+      await page.getByRole("button", { name: "Change 2 rows" }).click();
+      await visible(page.getByText("Changed 2 applications"), 20_000);
+      const tracker = await fs.readFile(path.join(tmp, "data", "applications.md"), "utf8");
+      for (const num of ["1", "4"]) {
+        const row = tracker.split(/\r?\n/).find((line) => line.startsWith(`| ${num} |`));
+        assert.ok(row, `row ${num} not found in the written tracker`);
+        assert.match(row, /\| Responded \|/, `row ${num} not Responded: ${row}`);
+      }
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+    });
+
+    await step("CSV export matches the visible row set", async () => {
+      const [download] = await Promise.all([
+        page.waitForEvent("download"),
+        page.getByRole("button", { name: "Export CSV" }).click(),
+      ]);
+      assert.match(download.suggestedFilename(), /^applications-all-\d{4}-\d{2}-\d{2}\.csv$/);
+      let csv = "";
+      for await (const chunk of await download.createReadStream()) csv += chunk.toString("utf8");
+      const lines = csv.trim().split("\n");
+      assert.equal(lines[0], "#,Date,Company,Role,Score,Status,Last transition");
+      assert.equal(lines.length, 5, `expected header + 4 rows, got ${lines.length}: ${csv}`);
+      assert.ok(csv.includes("OpenAI"), "a visible row is missing from the export");
+      assert.ok(csv.includes("Responded"), "the exported status is stale");
+    });
+
     // --- Nothing crashed along the way ---------------------------------------
     await step("no page errors or unexpected console errors", async () => {
       assert.deepEqual(pageErrors, []);
