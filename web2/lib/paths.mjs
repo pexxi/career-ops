@@ -1,6 +1,7 @@
 // Resolves the same career-ops file locations the CLI resolves — by importing the
 // CLI's own resolver rather than re-implementing the precedence rules.
 // (web/AGENTS.md rule 1 in spirit: orchestrate the core, never reimplement it.)
+import fs from "node:fs";
 import path from "node:path";
 import { getCareerOpsRoot, resolveTrackerPath } from "../../path-resolver.mjs";
 
@@ -40,4 +41,14 @@ export function locateFiles() {
     statusLog: statusLogPath(tracker),
     statesYml: path.join(repoRoot(), "templates", "states.yml"),
   };
+}
+
+/** Which rung of getCareerOpsRoot()'s precedence produced the data root — a
+ * label for the System page only; the path itself always comes from the core. */
+export function rootSource() {
+  if (process.env.CAREER_OPS_ROOT?.trim()) return "env CAREER_OPS_ROOT";
+  if (process.env.CAREER_OPS_DATA_DIR?.trim()) return "env CAREER_OPS_DATA_DIR";
+  const marker = path.join(repoRoot(), ".career-ops-data");
+  if (fs.existsSync(marker) && fs.readFileSync(marker, "utf8").trim()) return "marker .career-ops-data";
+  return "repo default";
 }

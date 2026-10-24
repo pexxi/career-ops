@@ -186,3 +186,27 @@ test("a Deciding-only tracker still has a non-zero funnel (Evaluated bar)", asyn
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+// Ticket 07: missing ≠ broken ≠ healthy, per file, with the resolved paths.
+test("GET /api/system reports each file as ok / missing / error with its path", async () => {
+  pointAt("smoke");
+  let body = await (await app.request("/api/system")).json();
+  assert.equal(body.dataRoot, fixtureRoot("smoke"));
+  assert.equal(body.rootSource, "env CAREER_OPS_ROOT");
+  assert.equal(body.node, process.version);
+  assert.deepEqual(body.checks.map((c) => [c.id, c.state]), [["tracker", "ok"], ["statusLog", "ok"], ["reportsDir", "ok"]]);
+  assert.equal(body.checks[1].path, path.join(fixtureRoot("smoke"), "data", "status-log.tsv"));
+
+  pointAt("tracker-ok"); // no ledger, no reports dir
+  body = await (await app.request("/api/system")).json();
+  assert.deepEqual(body.checks.map((c) => c.state), ["ok", "missing", "missing"]);
+
+  pointAt("tracker-broken");
+  body = await (await app.request("/api/system")).json();
+  assert.equal(body.checks[0].state, "error");
+  assert.match(body.checks[0].detail, /No tracker table header/);
+
+  pointAt("tracker-missing");
+  body = await (await app.request("/api/system")).json();
+  assert.equal(body.checks[0].state, "missing");
+});

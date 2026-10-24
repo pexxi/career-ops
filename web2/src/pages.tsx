@@ -1,17 +1,16 @@
-// Stub pages for the #01 dev shell; each is replaced by its own ticket
-// (07 System).
-// 05 landed: Reports browser.
-// 06 landed: Overview KPIs + funnel.
-// 02 landed: Applications table + stage lens.
-// 03 landed: stage-focused application detail drawer.
-// 04 landed: multi-row selection, bulk state change, CSV export.
+// Pages for the web2 shell (ticket 01), one section per ticket.
+// 02 Applications table + stage lens · 03 stage-focused detail drawer ·
+// 04 selection, bulk state change, CSV export · 05 Reports browser ·
+// 06 Overview KPIs + funnel · 07 System health.
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Anchor,
+  Badge,
   Button,
   Center,
   Checkbox,
+  Code,
   Drawer,
   Group,
   List,
@@ -45,15 +44,6 @@ import { parseMachineSummaryFields } from "../lib/reportfields.mjs";
 import { sortRows } from "../lib/sortrows.mjs";
 import { runSequential } from "../lib/bulk.mjs";
 import { csvFilename, localDateIso, toCsv } from "../lib/csv.mjs";
-
-function Stub({ title, blurb }: { title: string; blurb: string }) {
-  return (
-    <Stack h="100%" align="center" justify="center" gap="xs">
-      <Title order={2}>{title}</Title>
-      <Text c="dimmed">{blurb}</Text>
-    </Stack>
-  );
-}
 
 // --- Overview (ticket 06) ----------------------------------------------------
 
@@ -1002,4 +992,61 @@ export function ReportsPage() {
   );
 }
 
-export const SystemPage = () => <Stub title="System" blurb="System health lands here (ticket 07)." />;
+// --- System (ticket 07) ------------------------------------------------------
+
+const CHECK_STATE = {
+  ok: { color: "green", label: "OK" },
+  missing: { color: "yellow", label: "Missing" },
+  error: { color: "red", label: "Broken" },
+} as const;
+
+export function SystemPage() {
+  const query = useQuery({ queryKey: ["system"], queryFn: api.system });
+  if (query.isPending) {
+    return (
+      <Center py="xl">
+        <Loader size="sm" />
+      </Center>
+    );
+  }
+  if (query.isError) {
+    return (
+      <Alert color="red" title="System status unavailable">
+        {query.error.message}
+      </Alert>
+    );
+  }
+  const { dataRoot, rootSource, node, checks } = query.data;
+  return (
+    <Stack gap="md">
+      <Title order={2}>System</Title>
+      <Paper withBorder p="md" radius="md">
+        <FactRow label="Data root">
+          <Code>{dataRoot}</Code>
+        </FactRow>
+        <FactRow label="Resolved by">
+          <Text size="sm">{rootSource}</Text>
+        </FactRow>
+        <FactRow label="Node">
+          <Code>{node}</Code>
+        </FactRow>
+      </Paper>
+      <SimpleGrid cols={{ base: 1, md: 3 }}>
+        {checks.map((c) => (
+          <Paper key={c.id} withBorder p="md" radius="md">
+            <Group justify="space-between" mb="xs">
+              <Text fw={600}>{c.label}</Text>
+              <Badge color={CHECK_STATE[c.state].color} variant="light">
+                {CHECK_STATE[c.state].label}
+              </Badge>
+            </Group>
+            <Code block>{c.path}</Code>
+            <Text size="sm" mt="xs" c={c.state === "ok" ? "dimmed" : undefined}>
+              {c.state === "missing" ? "Not found at this path." : c.detail}
+            </Text>
+          </Paper>
+        ))}
+      </SimpleGrid>
+    </Stack>
+  );
+}

@@ -171,9 +171,13 @@ async function main() {
       await absent(page.getByRole("tab", { name: "Stage focus" }));
     });
 
-    await step("System screen renders", async () => {
+    await step("System screen shows the data root and three healthy file checks", async () => {
       await goto("system");
       await visible(page.getByRole("heading", { name: "System" }));
+      await visible(page.getByText(tmp, { exact: true }));
+      await visible(page.getByText("env CAREER_OPS_ROOT"));
+      assert.equal(await page.getByText("OK", { exact: true }).count(), 3);
+      await visible(page.getByText(path.join(tmp, "data", "status-log.tsv")));
     });
 
     // --- Drawer: one stage at a time ----------------------------------------

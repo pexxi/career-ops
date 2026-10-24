@@ -9,12 +9,13 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
-import { locateFiles } from "../lib/paths.mjs";
+import { locateFiles, rootSource } from "../lib/paths.mjs";
 import { readTracker } from "../lib/tracker.mjs";
 import { readHistoryByRow } from "../lib/statuslog.mjs";
 import { listReports, readReport } from "../lib/reports.mjs";
 import { overview } from "../lib/overview.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
+import { parseStatusLog } from "../../funnel-velocity.mjs";
 
 // Canonical states from templates/states.yml (set-status.mjs is the real
 // validator; this only rejects obviously-bad requests early).
@@ -122,6 +123,40 @@ app.post("/api/status", async (c) => {
     payload = null;
   }
   return c.json({ ok: true, result: payload ?? {} });
+});
+
+// System health (ticket 07): each file the app reads is ok, missing (ENOENT)
+// or broken (any other error, incl. a parse failure) — three different states.
+async function check(id, label, filePath, probe) {
+  try {
+    return { id, label, path: filePath, state: "ok", detail: await probe() };
+  } catch (err) {
+    return { id, label, path: filePath, state: err.code === "ENOENT" ? "missing" : "error", detail: err.message };
+  }
+}
+
+app.get("/api/system", async (c) => {
+  const files = await locateFiles();
+  const checks = await Promise.all([
+    check("tracker", "Application tracker", files.tracker, async () => {
+      const { rows, warnings } = await readTracker(files.tracker);
+      return `${rows.length} rows${warnings.length ? `, ${warnings.length} skipped (malformed)` : ""}`;
+    }),
+    check("statusLog", "Status ledger", files.statusLog, async () => {
+      const text = await fs.promises.readFile(files.statusLog, "utf8");
+      const { observations, unparseable } = parseStatusLog(text, loadStates(files));
+      if (unparseable.length) {
+        const first = unparseable[0];
+        throw new Error(`${unparseable.length} unparseable line(s); first: line ${first.line} (${first.reason})`);
+      }
+      return `${observations.length} transitions`;
+    }),
+    check("reportsDir", "Reports directory", files.reportsDir, async () => {
+      const names = await fs.promises.readdir(files.reportsDir);
+      return `${names.filter((f) => f.endsWith(".md")).length} reports`;
+    }),
+  ]);
+  return c.json({ dataRoot: files.dataRoot, rootSource: rootSource(), node: process.version, checks });
 });
 
 // --- Production static SPA (dev: Vite serves the frontend instead) ----------

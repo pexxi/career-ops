@@ -45,6 +45,21 @@ export interface ReportMeta {
   archetype: string;
 }
 
+export interface SystemCheck {
+  id: string;
+  label: string;
+  path: string;
+  state: "ok" | "missing" | "error";
+  detail: string;
+}
+
+export interface SystemPayload {
+  dataRoot: string;
+  rootSource: string;
+  node: string;
+  checks: SystemCheck[];
+}
+
 export interface OverviewPayload {
   kpis: { deciding: number; active: number; everHired: number; avgScore: number | null };
   funnel: Array<{ stage: string; count: number }>;
@@ -80,6 +95,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   applications: () => request<ApplicationsPayload>("/api/applications"),
+  system: () => request<SystemPayload>("/api/system"),
   overview: () => request<OverviewPayload>("/api/overview"),
   reports: () => request<ReportsPayload>("/api/reports"),
   report: (num: string | number, signal?: AbortSignal) =>
