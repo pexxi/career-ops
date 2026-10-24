@@ -16,6 +16,18 @@ import { listReports, readReport } from "../lib/reports.mjs";
 import { overview } from "../lib/overview.mjs";
 import { intelDir, readIntel } from "../lib/intel.mjs";
 import { applyProfilePatch, readProfile } from "../lib/profile.mjs";
+import {
+  appendTranscript,
+  askCoach,
+  buildCoachRequest,
+  chatDir,
+  coachStatus,
+  extractProposals,
+  listSessions,
+  loadCoachConfig,
+  readTranscript,
+} from "../lib/coach.mjs";
+import { randomUUID } from "node:crypto";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 import { parseStatusLog } from "../../funnel-velocity.mjs";
 
@@ -147,6 +159,56 @@ app.post("/api/profile/apply", async (c) => {
     if (err.code === "PATCH_REJECTED") return c.json({ error: { code: err.code, message: err.message } }, 409);
     throw err;
   }
+});
+
+// Profile coach (ticket 11, ADR 0005): proposes edits, writes no profile file.
+// The key stays here: only coachStatus() (configured/model/reason) is sent.
+app.get("/api/profile/coach", async (c) =>
+  c.json({ ...coachStatus(await loadCoachConfig()), sessions: await listSessions(chatDir()) }),
+);
+
+app.get("/api/profile/coach/:session", async (c) => {
+  try {
+    const entries = await readTranscript(chatDir(), c.req.param("session"));
+    // Proposals are re-derived from the reply text, so a resumed session can still apply them.
+    const messages = entries.map((m) => (m.role === "assistant" ? { ...m, proposals: extractProposals(m.content) } : m));
+    return c.json({ messages });
+  } catch (err) {
+    return c.json({ error: { code: "USAGE", message: err.message } }, 400);
+  }
+});
+
+app.post("/api/profile/chat", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const message = String(body?.message ?? "").trim();
+  const reportNums = Array.isArray(body?.reports) ? body.reports.map(String) : [];
+  if (!message) return c.json({ error: { code: "USAGE", message: "message is required" } }, 400);
+  if (reportNums.some((n) => !/^\d{1,6}$/.test(n))) {
+    return c.json({ error: { code: "USAGE", message: "reports must be report numbers" } }, 400);
+  }
+  const config = await loadCoachConfig();
+  if (!config.ok) return c.json({ error: { code: "COACH_NOT_CONFIGURED", message: config.reason } }, 503);
+
+  const sessionId = body?.sessionId || randomUUID();
+  const files = await locateFiles();
+  const history = await readTranscript(chatDir(), sessionId).catch(() => null);
+  if (!history) return c.json({ error: { code: "USAGE", message: "bad sessionId" } }, 400);
+  const reports = await Promise.all(
+    reportNums.map(async (n) => ({ num: n, markdown: (await readReport(files.reportsDir, Number(n))).markdown })),
+  );
+  const request = buildCoachRequest({ files: (await readProfile()).files, reports, history, message });
+
+  let reply;
+  try {
+    reply = await askCoach(config, request);
+  } catch (err) {
+    // SDK errors carry status + message, never the key.
+    return c.json({ error: { code: "COACH_API_ERROR", message: err.message } }, 502);
+  }
+  const at = new Date().toISOString();
+  await appendTranscript(chatDir(), sessionId, { role: "user", content: message, reports: reportNums, at });
+  await appendTranscript(chatDir(), sessionId, { role: "assistant", content: reply, at: new Date().toISOString() });
+  return c.json({ sessionId, reply, proposals: extractProposals(reply) });
 });
 
 // System health (ticket 07): each file the app reads is ok, missing (ENOENT)

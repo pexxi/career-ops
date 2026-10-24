@@ -14,7 +14,7 @@ const { app } = await import("../server/index.mjs");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = (name) => path.join(here, "fixtures", name);
 
-const envKeys = ["CAREER_OPS_ROOT", "CAREER_OPS_DATA_DIR", "CAREER_OPS_TRACKER", "CAREER_OPS_PROFILE", "WEB2_DATA_DIR"];
+const envKeys = ["CAREER_OPS_ROOT", "CAREER_OPS_DATA_DIR", "CAREER_OPS_TRACKER", "CAREER_OPS_PROFILE", "WEB2_DATA_DIR", "WEB2_CONFIG"];
 let saved = {};
 
 beforeEach(() => {
@@ -271,6 +271,35 @@ test("POST /api/profile/apply writes a confirmed patch; dryRun and a bad file wr
     res = await post("/api/profile/apply", { file: "profile", patch });
     assert.equal(res.status, 200);
     assert.equal(await fs.readFile(yml, "utf8"), original.replace("EUR 100K", "EUR 105K"));
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// Ticket 11: the coach's routes. Without a config the page still works and the
+// chat says why; with one, the status reports the model and never the key.
+test("profile coach: missing config → setup state + 503 on chat; configured status never carries the key", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-coach-route-"));
+  try {
+    pointAt("profile");
+    process.env.WEB2_DATA_DIR = tmp;
+    process.env.WEB2_CONFIG = path.join(tmp, "config.json");
+    let status = await (await app.request("/api/profile/coach")).json();
+    assert.equal(status.configured, false);
+    assert.match(status.reason, /config\.json/);
+    assert.deepEqual(status.sessions, []);
+    const res = await post("/api/profile/chat", { message: "hi", reports: [] });
+    assert.equal(res.status, 503);
+    assert.equal((await res.json()).error.code, "COACH_NOT_CONFIGURED");
+
+    await fs.writeFile(process.env.WEB2_CONFIG, JSON.stringify({ provider: "anthropic", apiKey: "sk-ant-never-shown" }));
+    const raw = await (await app.request("/api/profile/coach")).text();
+    assert.ok(!raw.includes("sk-ant-never-shown"), "the API key reached the client");
+    status = JSON.parse(raw);
+    assert.equal(status.configured, true);
+    assert.equal(status.model, "claude-opus-5-5");
+    const bad = await post("/api/profile/chat", { message: "", reports: [] });
+    assert.equal(bad.status, 400);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

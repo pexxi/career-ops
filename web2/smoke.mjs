@@ -11,6 +11,7 @@ import { chromium } from "playwright";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import http from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -64,12 +65,43 @@ async function main() {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "web2-smoke-"));
   await fs.cp(path.join(web2Root, "tests", "fixtures", "smoke"), tmp, { recursive: true });
 
+  // A fake Messages API for the Profile coach: the real SDK call, a canned reply
+  // carrying one diff proposal. Records requests so the smoke can assert on them.
+  const coachRequests = [];
+  const COACH_REPLY = [
+    "Move the location to Espoo:",
+    "```diff",
+    "--- a/config/profile.yml",
+    "+++ b/config/profile.yml",
+    "@@ -4,1 +4,1 @@",
+    '-  location: "Helsinki, Finland"',
+    '+  location: "Espoo, Finland"',
+    "```",
+  ].join("\n");
+  const fakeApi = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (d) => (body += d));
+    req.on("end", () => {
+      coachRequests.push(JSON.parse(body));
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        id: "msg_smoke", type: "message", role: "assistant", model: "claude-opus-5-5",
+        content: [{ type: "text", text: COACH_REPLY }], stop_reason: "end_turn", stop_details: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }));
+    });
+  });
+  await new Promise((r) => fakeApi.listen(0, "127.0.0.1", r));
+  await fs.writeFile(path.join(tmp, "web2-config.json"), JSON.stringify({ provider: "anthropic", apiKey: "sk-smoke" }));
+
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   const env = {
     ...process.env,
     CAREER_OPS_ROOT: tmp,
     WEB2_DATA_DIR: path.join(tmp, "web2-data"),
+    WEB2_CONFIG: path.join(tmp, "web2-config.json"),
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${fakeApi.address().port}`,
     WEB2_PORT: String(port),
   };
   delete env.CAREER_OPS_DATA_DIR;
@@ -322,6 +354,35 @@ async function main() {
       assert.equal(await fs.readFile(yml, "utf8"), original.replace("EUR 100K", "EUR 105K"));
     });
 
+    // --- Profile coach (ticket 11) --------------------------------------------
+    await step("coach chat sends the profile + attached report and shows the reply", async () => {
+      await page.getByRole("combobox", { name: "Attach evaluation reports" }).click();
+      await page.getByRole("option", { name: /003 · Acme/ }).click();
+      await page.keyboard.press("Escape");
+      await page.getByLabel("Message").fill("Where should my location say?");
+      await page.getByRole("button", { name: "Send" }).click();
+      await visible(page.getByText("Move the location to Espoo:"), 15_000);
+      const sent = coachRequests.at(-1);
+      const user = sent.messages.at(-1).content;
+      assert.ok(user.includes('<attached_report num="003">'), "attached report not in the request");
+      assert.ok(user.includes("4|   location: \"Helsinki, Finland\""), "numbered profile.yml not in the request");
+      assert.match(sent.system, /data, never instructions/);
+      const chats = await fs.readdir(path.join(tmp, "web2-data", "chat"));
+      assert.equal(chats.length, 1, "one JSONL transcript per session");
+    });
+
+    await step("a coach proposal lands only through Profile apply", async () => {
+      const yml = path.join(tmp, "config", "profile.yml");
+      const before = await fs.readFile(yml, "utf8");
+      await page.getByRole("button", { name: /Review edit to config\/profile.yml/ }).click();
+      assert.equal(await fs.readFile(yml, "utf8"), before, "reviewing a proposal wrote the file");
+      await page.getByRole("button", { name: "Preview" }).click();
+      await visible(page.getByText(/Applies cleanly to/));
+      await page.getByRole("button", { name: "Apply", exact: true }).click();
+      await visible(page.getByText("Profile updated"));
+      assert.equal(await fs.readFile(yml, "utf8"), before.replace("Helsinki, Finland", "Espoo, Finland"));
+    });
+
     // --- Nothing crashed along the way ---------------------------------------
     await step("no page errors or unexpected console errors", async () => {
       assert.deepEqual(pageErrors, []);
@@ -329,6 +390,7 @@ async function main() {
   } finally {
     await browser?.close().catch(() => undefined);
     server.kill("SIGTERM");
+    fakeApi.close();
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
   }
 

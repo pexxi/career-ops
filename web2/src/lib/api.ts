@@ -102,6 +102,26 @@ export interface ApplyResult {
   written: boolean;
 }
 
+export interface CoachProposal {
+  file: ProfileFile["name"];
+  patch: string;
+}
+
+export interface CoachStatus {
+  configured: boolean;
+  model?: string;
+  reason?: string;
+  sessions: Array<{ id: string; title: string; updated: string }>;
+}
+
+export interface CoachMessage {
+  role: "user" | "assistant";
+  content: string;
+  at: string;
+  reports?: string[];
+  proposals?: CoachProposal[];
+}
+
 export interface SystemCheck {
   id: string;
   label: string;
@@ -159,6 +179,14 @@ export const api = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ file, patch, dryRun }),
+    }),
+  coach: () => request<CoachStatus>("/api/profile/coach"),
+  coachSession: (id: string) => request<{ messages: CoachMessage[] }>(`/api/profile/coach/${encodeURIComponent(id)}`),
+  coachChat: (sessionId: string | null, message: string, reports: string[]) =>
+    request<{ sessionId: string; reply: string; proposals: CoachProposal[] }>("/api/profile/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, message, reports }),
     }),
   system: () => request<SystemPayload>("/api/system"),
   overview: () => request<OverviewPayload>("/api/overview"),

@@ -10,6 +10,7 @@ import {
   Center,
   Code,
   Group,
+  MultiSelect,
   Loader,
   Paper,
   ScrollArea,
@@ -26,7 +27,7 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { api, ApiError, type ApplyResult, type ProfileFile, type ProfileYaml } from "./lib/api";
+import { api, ApiError, type ApplyResult, type CoachProposal, type ProfileFile, type ProfileYaml } from "./lib/api";
 
 const FILE_LABELS: Record<ProfileFile["name"], string> = {
   profile: "config/profile.yml",
@@ -207,8 +208,133 @@ export function ProfileApply({ initialFile = "profile", initialPatch = "" }: { i
   );
 }
 
+/** Profile coach (ticket 11, ADR 0005): chat about the profile, with reports
+ * attached as context. Its proposals are only ever handed to Profile apply. */
+function CoachPanel({ onPropose }: { onPropose: (p: CoachProposal) => void }) {
+  const queryClient = useQueryClient();
+  const status = useQuery({ queryKey: ["coach"], queryFn: api.coach });
+  const reportsQuery = useQuery({ queryKey: ["reports"], queryFn: api.reports });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [attached, setAttached] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const transcript = useQuery({
+    queryKey: ["coach", "session", sessionId],
+    queryFn: () => api.coachSession(sessionId!),
+    enabled: sessionId != null,
+  });
+  const send = useMutation({
+    mutationFn: () => api.coachChat(sessionId, message, attached),
+    onSuccess: (res) => {
+      setSessionId(res.sessionId);
+      setMessage("");
+      queryClient.invalidateQueries({ queryKey: ["coach"] });
+    },
+    onError: (err) =>
+      notifications.show({
+        title: "Coach request failed",
+        message: err instanceof ApiError ? err.message : String(err),
+        color: "red",
+        autoClose: 20_000,
+      }),
+  });
+
+  if (status.isPending) return null;
+  if (status.isError) {
+    return (
+      <Alert color="red" title="Coach status unavailable">
+        {status.error.message}
+      </Alert>
+    );
+  }
+  if (!status.data.configured) {
+    return (
+      <Alert color="gray" title="Profile coach is not set up">
+        <Text size="sm">{status.data.reason}</Text>
+        <Code block mt="xs">
+          {'{ "provider": "anthropic", "model": "claude-opus-5-5", "apiKeyEnv": "ANTHROPIC_API_KEY" }'}
+        </Code>
+        <Text size="xs" c="dimmed" mt="xs">
+          web2/config.json is gitignored. The key stays on the server and is never sent to this page.
+        </Text>
+      </Alert>
+    );
+  }
+
+  const messages = transcript.data?.messages ?? [];
+  return (
+    <Paper withBorder p="md" radius="md">
+      <Stack gap="sm">
+        <Group justify="space-between">
+          <Text fw={600}>Profile coach</Text>
+          <Text size="xs" c="dimmed">
+            {status.data.model} · proposes edits only; you apply them below
+          </Text>
+        </Group>
+        <Select
+          label="Session"
+          placeholder="New session"
+          clearable
+          data={status.data.sessions.map((s) => ({ value: s.id, label: `${s.updated.slice(0, 10)} · ${s.title}` }))}
+          value={sessionId}
+          onChange={setSessionId}
+        />
+        <ScrollArea.Autosize mah={480}>
+          <Stack gap="xs">
+            {messages.map((m, i) => (
+              <Paper key={i} p="sm" radius="md" bg={m.role === "user" ? "var(--mantine-color-default-hover)" : undefined} withBorder={m.role === "assistant"}>
+                <Text size="xs" c="dimmed" mb={4}>
+                  {m.role === "user" ? "You" : "Coach"}
+                  {m.reports?.length ? ` · attached reports ${m.reports.join(", ")}` : ""}
+                </Text>
+                {m.role === "user" ? <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{m.content}</Text> : <Markdown remarkPlugins={[remarkGfm]}>{m.content}</Markdown>}
+                {(m.proposals ?? []).map((p, j) => (
+                  <Button key={j} size="xs" variant="light" mt={4} mr="xs" onClick={() => onPropose(p)}>
+                    Review edit to {FILE_LABELS[p.file]} in Profile apply
+                  </Button>
+                ))}
+              </Paper>
+            ))}
+            {send.isPending && (
+              <Group gap="xs">
+                <Loader size="xs" />
+                <Text size="sm" c="dimmed">
+                  Coach is thinking…
+                </Text>
+              </Group>
+            )}
+          </Stack>
+        </ScrollArea.Autosize>
+        <MultiSelect
+          label="Attach evaluation reports"
+          placeholder="Optional context"
+          searchable
+          clearable
+          data={(reportsQuery.data?.reports ?? []).map((r) => ({ value: r.num, label: `${r.num} · ${r.company} — ${r.role}` }))}
+          value={attached}
+          onChange={setAttached}
+        />
+        <Textarea
+          label="Message"
+          placeholder="e.g. Tighten my headline for AI Solutions Architect roles"
+          autosize
+          minRows={2}
+          value={message}
+          onChange={(e) => setMessage(e.currentTarget.value)}
+        />
+        <Group>
+          <Button disabled={!message.trim()} loading={send.isPending} onClick={() => send.mutate()}>
+            Send
+          </Button>
+        </Group>
+      </Stack>
+    </Paper>
+  );
+}
+
 export function ProfilePage() {
   const query = useQuery({ queryKey: ["profile"], queryFn: api.profile });
+  // A coach proposal re-mounts Profile apply pre-filled with it (n forces the remount).
+  const [proposal, setProposal] = useState<(CoachProposal & { n: number }) | null>(null);
   if (query.isPending) {
     return (
       <Center py="xl">
@@ -262,7 +388,15 @@ export function ProfilePage() {
           </Tabs.Panel>
         ))}
       </Tabs>
-      <ProfileApply />
+      <CoachPanel
+        onPropose={(p) => {
+          setProposal((prev) => ({ ...p, n: (prev?.n ?? 0) + 1 }));
+          document.getElementById("profile-apply")?.scrollIntoView({ behavior: "smooth" });
+        }}
+      />
+      <div id="profile-apply">
+        <ProfileApply key={proposal?.n ?? 0} initialFile={proposal?.file} initialPatch={proposal?.patch} />
+      </div>
     </Stack>
   );
 }
