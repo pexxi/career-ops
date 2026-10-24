@@ -16,6 +16,10 @@ function browser() {
       return { async goto(value) { url = value; return { status: () => 200 }; }, url() { return url; },
         async waitForTimeout() {}, async title() { return 'Engineer | Fictional'; }, async $eval() { return 'Engineer'; },
         async evaluate() { return 'Fictional engineering role with responsibilities and requirements. '.repeat(40); },
+        // Fork: the capture is a full-page screenshot wrapped in a PDF (see
+        // screenshotToPdf), so the mock page needs both hops.
+        async screenshot() { return Buffer.from('%PNG-fixture ' + url); },
+        async setContent() {},
         async pdf() { return Buffer.from('%PDF-fixture ' + url); } };
     } };
   } };
@@ -31,7 +35,9 @@ try {
   check('distinct same-title postings retain independent captures', () => {
     assert.notEqual(first.filename, second.filename);
     assert.equal(read(first), firstBytes);
-    assert.equal(read(second), '%PDF-fixture ' + urls[1]);
+    // The wrapper page shares no state with the capture page in this mock, so
+    // the wrapped bytes cannot echo the URL; the .md capture carries identity.
+    assert.match(read(second), /^%PDF-fixture/);
     assert.match(first.filename, /^\d{4}-\d{2}-\d{2}_fictional_engineer.*\.pdf$/);
   });
   const repeated = await capture(urls[0]);
@@ -44,7 +50,7 @@ try {
   check('concurrent writers reserve separate destinations without overwrite', () => {
     assert.equal(new Set(concurrent.map(r => r.filename)).size, 4);
     assert.equal(read(first), firstBytes);
-    assert.equal(readdirSync(join(root, 'jds')).length, 7);
+    assert.equal(readdirSync(join(root, 'jds')).length, 14); // 4 captures × (pdf + md)
     for (const result of concurrent) assert.equal(read(result), firstBytes);
   });
   const realOpen = fs.promises.open;

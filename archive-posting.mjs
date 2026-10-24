@@ -25,7 +25,7 @@
  */
 
 import { chromium } from 'playwright';
-import { open, unlink, readFile } from 'fs/promises';
+import { open, unlink, writeFile, readFile } from 'fs/promises';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';

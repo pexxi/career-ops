@@ -22,7 +22,7 @@
 export function mergeScanResults(results, offerCount) {
   const sum = (key) => results.reduce((n, r) => n + (typeof r[key] === "number" ? r[key] : 0), 0);
   const anyNumber = (key) => results.some((r) => typeof r[key] === "number");
-  const datasetStatus = {};
+  const datasetStatus = /** @type {Record<string, "ok" | "stale" | "empty">} */ ({});
   for (const r of results) Object.assign(datasetStatus, r.datasetStatus || {});
   return {
     companiesScanned: sum("companiesScanned"),
