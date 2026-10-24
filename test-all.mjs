@@ -19802,6 +19802,25 @@ try {
   fail(`sponsors check: ${e.message}`);
 }
 
+console.log('\n77. web2 dashboard suites (fork-only)');
+try {
+  // web2/ has its own package (hono, the Anthropic SDK), so its suites run
+  // through its own `npm test`. Without web2/node_modules they cannot import,
+  // which is a setup step, not a failure: warn so the gap stays visible.
+  const web2 = join(ROOT, 'web2');
+  if (!existsSync(web2)) {
+    // Upstream checkout: nothing to gate.
+  } else if (!existsSync(join(web2, 'node_modules'))) {
+    warn('web2 suites skipped — run `npm install` in web2/ to gate them');
+  } else {
+    const r = spawnSync('npm', ['test'], { cwd: web2, encoding: 'utf8', timeout: 180000 });
+    if (r.status === 0) pass('web2 suites pass (npm test in web2/)');
+    else fail(`web2 suites failed (run: cd web2 && npm test)\n${String(r.stdout + r.stderr).split('\n').filter((l) => /not ok|✖/.test(l)).slice(0, 10).join('\n')}`);
+  }
+} catch (e) {
+  fail(`web2 suites: ${e.message}`);
+}
+
 // ── INLINE SECTIONS: END ────────────────────────────────────────
 
 if (INLINE_CHILD !== null) {

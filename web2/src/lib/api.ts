@@ -42,7 +42,6 @@ export interface ReportMeta {
   url: string;
   score: number | null;
   legitimacy: string;
-  archetype: string;
 }
 
 /** One provenance-stamped intel entry (ticket 08). `data` is captured
@@ -85,7 +84,6 @@ export interface ProfileYaml {
   };
   compensation?: Record<string, string>;
   work_preferences?: Record<string, unknown>;
-  location?: Record<string, unknown>;
 }
 
 export interface ProfilePayload {
@@ -149,7 +147,8 @@ export interface ReportsPayload {
 }
 
 export interface ReportPayload {
-  report: ReportMeta & { markdown: string };
+  /** `summary` = the Machine Summary as the core's parseMachineSummary reads it ({} when absent). */
+  report: ReportMeta & { markdown: string; summary: { final_decision?: string; hard_stops?: unknown; soft_gaps?: unknown } };
 }
 
 export class ApiError extends Error {

@@ -50,8 +50,8 @@ The four user-layer files the Profile page is a view over: `config/profile.yml`
 ## Profile coach
 
 The AI conversation about your candidate profile (ADR 0005): a thin LLM call
-in the web2 server, configured by `web2/config.json`. It proposes edits and
+in the web2 server, configured by `config/web2.json` in the data root. It proposes edits and
 writes nothing itself — proposed text lands only through Profile apply. Its
 context is the candidate profile files plus evaluation reports the user
 attaches; attached report text is data, never instructions. One transcript per
-session under `web2/data/chat/` (gitignored, user data).
+session under `data/web2/chat/` in the data root (gitignored, user data).

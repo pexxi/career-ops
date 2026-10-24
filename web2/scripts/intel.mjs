@@ -14,7 +14,7 @@ import { parseCsv } from "../../linkedin-join.mjs";
 import { addIntel, aggregateDataset, intelDir } from "../lib/intel.mjs";
 import { locateFiles } from "../lib/paths.mjs";
 import { readTracker } from "../lib/tracker.mjs";
-import { localDateIso } from "../lib/csv.mjs";
+import { localToday } from "../../lib/local-today.mjs";
 
 const [command, ...rest] = process.argv.slice(2);
 const { values: o } = parseArgs({
@@ -53,7 +53,7 @@ if (command === "add") {
     await addIntel(intelDir(), company, {
       source: o.source,
       url: o.url,
-      fetchedAt: localDateIso(),
+      fetchedAt: localToday(),
       asOf: o["as-of"],
       kind: o.kind,
       data,

@@ -6,7 +6,6 @@ import { serve } from "@hono/node-server";
 // v2 moved static serving to a subpath export.
 import { serveStatic } from "@hono/node-server/serve-static";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { locateFiles, rootSource } from "../lib/paths.mjs";
@@ -26,10 +25,12 @@ import {
   listSessions,
   loadCoachConfig,
   readTranscript,
+  SESSION_ID_RE,
 } from "../lib/coach.mjs";
 import { randomUUID } from "node:crypto";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 import { parseStatusLog } from "../../funnel-velocity.mjs";
+import { isMainModule } from "../../lib/is-main-module.mjs";
 
 // Canonical states from templates/states.yml (set-status.mjs is the real
 // validator; this only rejects obviously-bad requests early).
@@ -60,13 +61,13 @@ async function loadApplications(files) {
 }
 
 app.get("/api/applications", async (c) => {
-  const files = await locateFiles();
+  const files = locateFiles();
   const { rows, warnings } = await loadApplications(files);
   return c.json({ trackerPath: files.tracker, dataRoot: files.dataRoot, rows, warnings });
 });
 
 app.get("/api/overview", async (c) => {
-  const files = await locateFiles();
+  const files = locateFiles();
   const { rows } = await loadApplications(files);
   const ledger = await fs.promises.readFile(files.statusLog, "utf8").catch((err) => {
     if (err.code === "ENOENT") return ""; // no ledger yet = no history, as readHistoryByRow treats it
@@ -76,7 +77,7 @@ app.get("/api/overview", async (c) => {
 });
 
 app.get("/api/reports", async (c) => {
-  const files = await locateFiles();
+  const files = locateFiles();
   return c.json({ reportsDir: files.reportsDir, reports: await listReports(files.reportsDir) });
 });
 
@@ -85,7 +86,7 @@ app.get("/api/reports/:num", async (c) => {
   if (!Number.isInteger(num) || num <= 0) {
     return c.json({ error: { code: "USAGE", message: `Bad report number "${c.req.param("num")}"` } }, 400);
   }
-  const files = await locateFiles();
+  const files = locateFiles();
   const report = await readReport(files.reportsDir, num);
   return c.json({ report });
 });
@@ -98,7 +99,7 @@ app.post("/api/status", async (c) => {
   if (!Number.isInteger(num) || num <= 0) {
     return c.json({ error: { code: "USAGE", message: "num must be a positive tracker row number" } }, 400);
   }
-  const files = await locateFiles();
+  const files = locateFiles();
   const labels = loadStates(files).map((s) => s.label);
   if (!labels.includes(state)) {
     return c.json({ error: { code: "USAGE", message: `state must be one of ${labels.join(", ")}` } }, 400);
@@ -125,18 +126,8 @@ app.post("/api/status", async (c) => {
       500,
     );
   }
-  // set-status --json prints a JSON object; find it defensively.
-  const jsonLine = result.stdout
-    .split(/\r?\n/)
-    .reverse()
-    .find((l) => l.trim().startsWith("{"));
-  let payload = null;
-  try {
-    payload = JSON.parse(jsonLine ?? "{}");
-  } catch {
-    payload = null;
-  }
-  return c.json({ ok: true, result: payload ?? {} });
+  // set-status --json prints exactly one JSON object.
+  return c.json({ ok: true, result: JSON.parse(result.stdout) });
 });
 
 // Company intel (ticket 08): read-only view of the local cache; never scrapes.
@@ -190,10 +181,10 @@ app.post("/api/profile/chat", async (c) => {
   if (!config.ok) return c.json({ error: { code: "COACH_NOT_CONFIGURED", message: config.reason } }, 503);
 
   const sessionId = body?.sessionId || randomUUID();
-  if (!/^[A-Za-z0-9-]{1,64}$/.test(String(sessionId))) {
+  if (!SESSION_ID_RE.test(String(sessionId))) {
     return c.json({ error: { code: "USAGE", message: "bad sessionId" } }, 400);
   }
-  const files = await locateFiles();
+  const files = locateFiles();
   // A corrupt transcript surfaces as a server error, not as the client's mistake.
   const history = await readTranscript(chatDir(), sessionId);
   const reports = await Promise.all(
@@ -225,7 +216,7 @@ async function check(id, label, filePath, probe) {
 }
 
 app.get("/api/system", async (c) => {
-  const files = await locateFiles();
+  const files = locateFiles();
   const checks = await Promise.all([
     check("tracker", "Application tracker", files.tracker, async () => {
       const { rows, warnings } = await readTracker(files.tracker);
@@ -259,11 +250,11 @@ if (fs.existsSync(distDir)) {
 
 // Bind the port only when this module is the entrypoint (`node server/index.mjs`,
 // dev.mjs, `npm start`) — importing it from tests must stay socket-free.
-const isEntrypoint =
-  process.env.WEB2_SERVE === "1" ||
-  (!!process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href);
+const isEntrypoint = process.env.WEB2_SERVE === "1" || isMainModule(import.meta.url);
 
-if (isEntrypoint) {
+if (isEntrypoint && process.argv.includes("--help")) {
+  console.log("usage: node server/index.mjs [--prod]   (port 4001, or 3001 with --prod; WEB2_PORT overrides)");
+} else if (isEntrypoint) {
   const port = Number(process.env.WEB2_PORT ?? (process.argv.includes("--prod") ? 3001 : 4001));
   serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
     console.log(`web2 API listening on http://127.0.0.1:${info.port}`);

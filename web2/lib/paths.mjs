@@ -1,9 +1,8 @@
 // Resolves the same career-ops file locations the CLI resolves — by importing the
 // CLI's own resolver rather than re-implementing the precedence rules.
 // (web/AGENTS.md rule 1 in spirit: orchestrate the core, never reimplement it.)
-import fs from "node:fs";
 import path from "node:path";
-import { getCareerOpsRoot, resolveTrackerPath } from "../../path-resolver.mjs";
+import { getCareerOpsRoot, getCareerOpsRootSource, resolveTrackerPath } from "../../path-resolver.mjs";
 
 export function repoRoot() {
   // web2/ is one level under the repo root; lib/ is one level under web2/.
@@ -43,12 +42,16 @@ export function locateFiles() {
   };
 }
 
-/** Which rung of getCareerOpsRoot()'s precedence produced the data root — a
- * label for the System page only; the path itself always comes from the core. */
-export function rootSource() {
-  if (process.env.CAREER_OPS_ROOT?.trim()) return "env CAREER_OPS_ROOT";
-  if (process.env.CAREER_OPS_DATA_DIR?.trim()) return "env CAREER_OPS_DATA_DIR";
-  const marker = path.join(repoRoot(), ".career-ops-data");
-  if (fs.existsSync(marker) && fs.readFileSync(marker, "utf8").trim()) return "marker .career-ops-data";
-  return "repo default";
+export { getCareerOpsRootSource as rootSource };
+
+/** web2's own user data (company intel, coach transcripts) — under the data
+ * root, so it follows CAREER_OPS_ROOT like every other user file.
+ * WEB2_DATA_DIR overrides it (tests). */
+export function web2DataDir() {
+  return process.env.WEB2_DATA_DIR || path.join(dataRoot(), "data", "web2");
+}
+
+/** The coach's model config (user layer, gitignored). WEB2_CONFIG overrides it (tests). */
+export function web2ConfigPath() {
+  return process.env.WEB2_CONFIG || path.join(dataRoot(), "config", "web2.json");
 }

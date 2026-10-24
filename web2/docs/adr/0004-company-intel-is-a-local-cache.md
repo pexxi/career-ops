@@ -5,8 +5,9 @@ review highlights (Glassdoor-style) and salary aggregates (levels.fyi-style).
 Neither source has a free API, and both forbid or resist automated scraping.
 
 **Decision:** web2 only *reads* company intel from a local, file-backed cache:
-one JSON snapshot per company under `web2/data/company-intel/` (gitignored user
-data; `WEB2_DATA_DIR` moves it). Shape:
+one JSON snapshot per company under `{data root}/data/web2/company-intel/`
+(gitignored user data, so it follows `CAREER_OPS_ROOT`; `WEB2_DATA_DIR` overrides
+it in tests). Shape:
 `{ company, sources: [{ source, url, fetchedAt, kind: reviews|salaries, data, asOf? }] }`.
 The file is keyed by the core's `normalizeCompanyName()` (invite-match.mjs), so
 "OpenAI, Inc." and "openai" share one snapshot. Entries are added by the

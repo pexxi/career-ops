@@ -1,36 +1,28 @@
 // Profile coach (ticket 11, ADR 0005): a thin Claude call from the web2 server
 // that PROPOSES edits to the candidate profile; it writes nothing. A proposal
 // lands only through Profile apply (lib/profile.mjs) after the user confirms
-// the diff. Config lives in web2/config.json (gitignored); the key never
-// leaves the server.
+// the diff. Config lives in {data root}/config/web2.json (gitignored); the key
+// never leaves the server.
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { web2ConfigPath, web2DataDir } from "./paths.mjs";
+import { FILE_LABELS } from "./profilefiles.mjs";
+
+export { FILE_LABELS };
 
 const DEFAULT_MODEL = "claude-opus-5-5";
-// Models that accept server-side refusal fallbacks (`fallbacks: "default"`).
-const FALLBACK_MODELS = new Set(["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"]);
-
-/** Same display names the Profile page uses; also how proposals are mapped back to a file. */
-export const FILE_LABELS = {
-  profile: "config/profile.yml",
-  cv: "cv.md",
-  modeProfile: "modes/_profile.md",
-  voice: "voice-dna.md",
-};
-
-export function configPath() {
-  return process.env.WEB2_CONFIG || path.join(import.meta.dirname, "..", "config.json");
-}
+/** A transcript id: also the transcript's file name, so nothing that can leave the dir. */
+export const SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
 /** → { ok: true, provider, model, apiKey } or { ok: false, reason } (reason is safe to show; never the key). */
-export async function loadCoachConfig(file = configPath()) {
+export async function loadCoachConfig(file = web2ConfigPath()) {
   let raw;
   try {
     raw = JSON.parse(await fs.readFile(file, "utf8"));
   } catch (err) {
     const why = err.code === "ENOENT" ? "does not exist" : `is not valid JSON (${err.message})`;
-    return { ok: false, reason: `web2/config.json ${why}. Create it with {"provider": "anthropic", "model": "${DEFAULT_MODEL}", "apiKeyEnv": "ANTHROPIC_API_KEY"}.` };
+    return { ok: false, reason: `${file} ${why}. Create it with {"provider": "anthropic", "model": "${DEFAULT_MODEL}", "apiKeyEnv": "ANTHROPIC_API_KEY"}.` };
   }
   if (raw.provider !== "anthropic") return { ok: false, reason: `provider must be "anthropic" (got ${JSON.stringify(raw.provider)})` };
   const apiKey = raw.apiKey || (raw.apiKeyEnv ? process.env[raw.apiKeyEnv] : undefined);
@@ -39,7 +31,7 @@ export async function loadCoachConfig(file = configPath()) {
       ok: false,
       reason: raw.apiKeyEnv
         ? `apiKeyEnv names ${raw.apiKeyEnv}, but that environment variable is not set for the web2 server`
-        : "config.json needs apiKey, or apiKeyEnv naming an environment variable that holds the key",
+        : "web2.json needs apiKey, or apiKeyEnv naming an environment variable that holds the key",
     };
   }
   return { ok: true, provider: raw.provider, model: raw.model || DEFAULT_MODEL, apiKey };
@@ -104,13 +96,7 @@ export function buildCoachRequest({ files, reports, history, message }) {
 /** One non-streaming call. Returns the reply text; a refusal comes back as text the UI can show. */
 export async function askCoach(config, request) {
   const client = new Anthropic({ apiKey: config.apiKey });
-  const fallback = FALLBACK_MODELS.has(config.model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {};
-  const response = await client.beta.messages.create({
-    model: config.model,
-    max_tokens: 16000,
-    ...fallback,
-    ...request,
-  });
+  const response = await client.messages.create({ model: config.model, max_tokens: 16000, ...request });
   if (response.stop_reason === "refusal") {
     return `The model declined this request${response.stop_details?.category ? ` (${response.stop_details.category})` : ""}. Try rephrasing it.`;
   }
@@ -131,14 +117,14 @@ export function extractProposals(text) {
   return proposals;
 }
 
-// --- Transcripts: one JSONL file per session under web2/data/chat/ -----------
+// --- Transcripts: one JSONL file per session under {web2 data}/chat/ ---------
 
 export function chatDir() {
-  return path.join(process.env.WEB2_DATA_DIR || path.join(import.meta.dirname, "..", "data"), "chat");
+  return path.join(web2DataDir(), "chat");
 }
 
 function sessionFile(dir, sessionId) {
-  if (!/^[A-Za-z0-9-]{1,64}$/.test(String(sessionId))) throw new Error(`Bad session id "${sessionId}"`);
+  if (!SESSION_ID_RE.test(String(sessionId))) throw new Error(`Bad session id "${sessionId}"`);
   return path.join(dir, `${sessionId}.jsonl`);
 }
 

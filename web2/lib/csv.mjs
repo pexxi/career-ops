@@ -17,9 +17,3 @@ export function toCsv(header, rows) {
 export function csvFilename(lens, date) {
   return `applications-${lens}-${date}.csv`;
 }
-
-/** The user's LOCAL calendar day: toISOString() would date 23:30 exports as tomorrow. */
-export function localDateIso(date = new Date()) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}

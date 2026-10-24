@@ -380,7 +380,10 @@ async function main() {
       await visible(page.getByText(/Applies cleanly to/));
       await page.getByRole("button", { name: "Apply", exact: true }).click();
       await visible(page.getByText("Profile updated"));
-      assert.equal(await fs.readFile(yml, "utf8"), before.replace("Helsinki, Finland", "Espoo, Finland"));
+      // The previous step's "Profile updated" can still be on screen, so wait on the file itself.
+      const expected = before.replace("Helsinki, Finland", "Espoo, Finland");
+      for (let i = 0; i < 40 && (await fs.readFile(yml, "utf8")) !== expected; i++) await new Promise((r) => setTimeout(r, 200));
+      assert.equal(await fs.readFile(yml, "utf8"), expected);
     });
 
     // --- Nothing crashed along the way ---------------------------------------

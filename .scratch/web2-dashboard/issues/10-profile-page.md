@@ -21,3 +21,5 @@
   - UI: new `src/profile.tsx` and a fifth nav item "Profile" (`#profile`). The page shows identity, compensation, work preferences, target roles with the archetype table, then one tab per file (markdown rendered, `profile.yml` raw). `ProfileApply` has Paste → Preview (dry run, diff shown in red/green) → Apply. Apply stays disabled until that exact file+patch has previewed cleanly, and it is exported for the coach (ticket 11).
   - The glossary's Write path / Candidate profile entries from planning are committed with this ticket.
   - Verified: 5 patcher tests (comments survive; a hunk at the wrong line is refused even when its context exists elsewhere; mismatch; multi-hunk offsets; no hunks), 2 route tests, typecheck, smoke (profile render + missing badge + preview-then-apply landing exactly one line on disk), and the real profile parses (5 archetypes, all four files present).
+
+- 2026-10-24 (review fix, two-axis review): Profile apply writes through the core's `replaceUserFile` (keeps a symlinked `cv.md` a symlink and its permissions) instead of a local tmp + rename. The unrequested Location card is removed.

@@ -104,6 +104,7 @@ test("POST /api/status changes a diverged row through --row, not a bare #N", asy
       body: JSON.stringify({ num: 2, state: "Applied" }),
     });
     assert.equal(res.status, 200);
+    assert.equal((await res.json()).result.newStatus, "Applied", "set-status --json output reaches the client");
     const tracker = await fs.readFile(path.join(tmp, "data", "applications.md"), "utf8");
     const row = tracker.split(/\r?\n/).find((line) => line.startsWith("| 2 |"));
     assert.ok(row, "row 2 not found in the written tracker");
@@ -143,6 +144,18 @@ test("GET /api/reports lists reports with number, company, role, score, date, le
   assert.equal(openai.date, "2026-08-25");
   assert.equal(openai.legitimacy, "High Confidence");
   assert.equal(openai.markdown, undefined, "the list must not ship every report body");
+});
+
+// Ticket 03: the drawer's decision facts come with the report, parsed by the
+// core's Machine Summary parser (real YAML, so column-0 list items work too).
+test("GET /api/reports/:num carries the parsed Machine Summary", async () => {
+  pointAt("smoke");
+  const res = await app.request("/api/reports/1");
+  assert.equal(res.status, 200);
+  const { report } = await res.json();
+  assert.equal(report.summary.final_decision, "Apply");
+  assert.deepEqual(report.summary.hard_stops, ["Requires US citizenship"]);
+  assert.deepEqual(report.summary.soft_gaps, ["No production Rust evidence"]);
 });
 
 // Ticket 06: Overview numbers come from the same tracker + ledger, via the

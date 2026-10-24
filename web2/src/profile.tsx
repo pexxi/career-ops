@@ -27,14 +27,10 @@ import { notifications } from "@mantine/notifications";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { FILE_LABELS as PROFILE_FILE_LABELS } from "../lib/profilefiles.mjs";
 import { api, ApiError, type ApplyResult, type CoachProposal, type ProfileFile, type ProfileYaml } from "./lib/api";
 
-const FILE_LABELS: Record<ProfileFile["name"], string> = {
-  profile: "config/profile.yml",
-  cv: "cv.md",
-  modeProfile: "modes/_profile.md",
-  voice: "voice-dna.md",
-};
+const FILE_LABELS: Record<ProfileFile["name"], string> = PROFILE_FILE_LABELS;
 
 function Facts({ title, entries }: { title: string; entries: Array<[string, unknown]> }) {
   return (
@@ -73,7 +69,6 @@ function Reference({ parsed }: { parsed: ProfileYaml }) {
         <Facts title="Compensation" entries={Object.entries(parsed.compensation ?? {})} />
         <Facts title="Work preferences" entries={Object.entries(parsed.work_preferences ?? {})} />
       </SimpleGrid>
-      <Facts title="Location" entries={Object.entries(parsed.location ?? {})} />
       <Paper withBorder p="md" radius="md">
         <Text fw={600} mb="xs">
           Target roles
@@ -271,7 +266,7 @@ function CoachPanel({ onPropose }: { onPropose: (p: CoachProposal) => void }) {
           {'{ "provider": "anthropic", "model": "claude-opus-5-5", "apiKeyEnv": "ANTHROPIC_API_KEY" }'}
         </Code>
         <Text size="xs" c="dimmed" mt="xs">
-          web2/config.json is gitignored. The key stays on the server and is never sent to this page.
+          config/web2.json (in the data root) is gitignored. The key stays on the server and is never sent to this page.
         </Text>
       </Alert>
     );

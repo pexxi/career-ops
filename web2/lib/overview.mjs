@@ -6,7 +6,8 @@ import { stageOfStatus } from "./stage.mjs";
 
 // Ranks come from the core's funnelStageRank(); Evaluated ranks 0, so every
 // non-SKIP row counts there and a Deciding-only tracker is never all zeros.
-const FUNNEL = ["Evaluated", "Applied", "Responded", "Assessment", "Interview", "Offer", "Hired"];
+// Parity-tested against templates/states.yml (tests/stage.test.mjs).
+export const FUNNEL = ["Evaluated", "Applied", "Responded", "Assessment", "Interview", "Offer", "Hired"];
 
 /** rows = /api/applications rows (with newest-first `history`); ledgerText = raw status-log.tsv. */
 export function overview(rows, ledgerText) {

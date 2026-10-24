@@ -129,7 +129,7 @@ test("transcripts are one JSONL file per session, listed newest first; a bad ses
 import http from "node:http";
 import { askCoach } from "../lib/coach.mjs";
 
-test("askCoach sends the built request with refusal fallbacks and returns the reply text", async () => {
+test("askCoach sends the built request and returns the reply text", async () => {
   const seen = [];
   let refuse = false;
   const server = http.createServer((req, res) => {
@@ -159,9 +159,8 @@ test("askCoach sends the built request with refusal fallbacks and returns the re
     const { url, headers, body } = seen[0];
     assert.match(url, /^\/v1\/messages/);
     assert.equal(headers["x-api-key"], "sk-test");
-    assert.match(headers["anthropic-beta"], /server-side-fallback-2026-07-01/);
+    assert.equal(headers["anthropic-beta"], undefined);
     assert.equal(body.model, "claude-opus-5-5");
-    assert.equal(body.fallbacks, "default");
     assert.equal(body.system, request.system);
     assert.deepEqual(body.messages, request.messages);
 

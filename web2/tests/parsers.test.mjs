@@ -5,7 +5,6 @@ import { parseTracker, extractReportNum, parseScoreCell } from "../lib/tracker.m
 import { historyByRow } from "../lib/statuslog.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
 import { stageOfStatus, rowsInStage } from "../lib/stage.mjs";
-import { parseMachineSummaryFields } from "../lib/reportfields.mjs";
 import { parseReportMeta } from "../lib/reports.mjs";
 
 const STATES = loadCanonicalStates(path.join(import.meta.dirname, "..", "..", "templates", "states.yml"));
@@ -134,11 +133,4 @@ test("parseReportMeta reads header facts", () => {
   assert.equal(meta.role, "Forward Deployed Engineer");
   assert.equal(meta.url, "https://jobs.ashbyhq.com/openai/x");
   assert.equal(meta.score, 4.6);
-});
-
-test("parseMachineSummaryFields pulls stage-relevant facts", () => {
-  const fields = parseMachineSummaryFields(REPORT);
-  assert.equal(fields.final_decision, "Apply");
-  assert.deepEqual(fields.hard_stops, []);
-  assert.deepEqual(fields.soft_gaps, ["No Rust evidence", "Travel policy unstated"]);
 });

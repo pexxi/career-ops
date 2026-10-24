@@ -294,3 +294,5 @@ web/out/
 scratch
 # Fork-owned path declarations (config/local-paths.example.txt recipe).
 !config/local-paths.txt
+# web2 coach model config (may hold an API key); its data lives under data/web2/.
+config/web2.json

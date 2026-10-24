@@ -1,13 +1,13 @@
 # Capturing company intel
 
 The drawer's "Company intel" tab reads a local cache (ADR 0004):
-`web2/data/company-intel/{company}.json`, gitignored user data. The web2 server
+`{data root}/data/web2/company-intel/{company}.json`, gitignored user data. The web2 server
 never fetches anything. Snapshots are filled by the routes below, in priority
 order, and every entry goes through `node scripts/intel.mjs`, which refuses an
 entry without `source`, `url` and `fetchedAt` and never overwrites an earlier
 entry: a new capture adds a dated entry beside the old one.
 
-Run every command from `web2/`. `WEB2_DATA_DIR` moves the cache root.
+Run every command from `web2/`. The cache follows `CAREER_OPS_ROOT`; `WEB2_DATA_DIR` overrides it.
 
 ## 1. Agent-assisted capture (primary)
 

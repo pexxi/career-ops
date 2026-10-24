@@ -14,19 +14,21 @@ loopback only, and the markdown stays the source of truth. Vocabulary:
 ## Layers
 
 ```
-src/ (React + Mantine + TanStack Query)   pages.tsx, profile.tsx, App.tsx (hash routing)
+src/ (React + Mantine + TanStack Query)   one file per page + drawer.tsx, App.tsx (hash routing)
    │  fetch /api/*  (src/lib/api.ts: typed fetchers)
 server/index.mjs (Hono routes; thin: validate, call lib, map errors to status codes)
    │
 lib/*.mjs (plain, unit-tested modules; browser-safe ones are imported by src/ too)
    │
-core career-ops modules (../../*.mjs): path-resolver, tracker-parse, funnel-stages,
-funnel-velocity, invite-match, linkedin-join, lib/yaml-document, set-status.mjs
+core career-ops modules (../../*.mjs): path-resolver, tracker-parse, tracker-utils,
+funnel-stages, funnel-velocity, invite-match, linkedin-join, analyze-patterns
+(Machine Summary), lib/yaml-document, lib/is-main-module, lib/local-today, set-status.mjs
 ```
 
 Rule: **orchestrate the core, never reimplement it.** Paths, tracker parsing,
 the status ledger, the funnel, company-name normalization, CSV and YAML parsing
-all come from the core modules.
+(including each report's Machine Summary, parsed server-side), user-file writes
+(`replaceUserFile`), dates and the entrypoint check all come from the core modules.
 
 ## Data the app reads
 
@@ -36,12 +38,16 @@ all come from the core modules.
 | Status ledger | `status-log.tsv` beside the tracker | `lib/statuslog.mjs` (core replay) |
 | Reports | `{data root}/reports/NNN-*.md` | `lib/reports.mjs` |
 | Candidate profile | `config/profile.yml`, `cv.md`, `modes/_profile.md`, `voice-dna.md` | `lib/profile.mjs` |
-| Company intel | `web2/data/company-intel/*.json` (gitignored) | `lib/intel.mjs` |
-| Coach transcripts | `web2/data/chat/*.jsonl` (gitignored) | `lib/coach.mjs` |
-| Coach config | `web2/config.json` (gitignored) | `lib/coach.mjs` |
+| Company intel | `{data root}/data/web2/company-intel/*.json` (gitignored) | `lib/intel.mjs` |
+| Coach transcripts | `{data root}/data/web2/chat/*.jsonl` (gitignored) | `lib/coach.mjs` |
+| Coach config | `{data root}/config/web2.json` (gitignored) | `lib/coach.mjs` |
+
+web2's own user data sits under the data root like every other user file, so it
+follows `CAREER_OPS_ROOT` (`lib/paths.mjs`: `web2DataDir()`, `web2ConfigPath()`).
 
 Env overrides: `CAREER_OPS_ROOT` / `CAREER_OPS_DATA_DIR` / `CAREER_OPS_TRACKER` /
-`CAREER_OPS_PROFILE` (core), `WEB2_DATA_DIR`, `WEB2_CONFIG`, `WEB2_PORT`.
+`CAREER_OPS_PROFILE` (core), `WEB2_DATA_DIR` / `WEB2_CONFIG` (test overrides of the
+two web2 locations), `WEB2_PORT`.
 
 Error contract: a missing file (ENOENT → 404, "missing") is a different state
 from a malformed one (parse error → 500, "broken"). The System page shows both.
@@ -50,9 +56,9 @@ from a malformed one (parse error → 500, "broken"). The System page shows both
 
 | Page | Routes | Notes |
 |---|---|---|
-| Overview | `GET /api/overview` | KPIs, ever-reached funnel (`funnel-stages.mjs` ranks), newest 30 transitions. Cards link to `#applications/{lens}`. |
+| Overview | `GET /api/overview` | KPIs, ever-reached funnel (`funnel-stages.mjs` ranks), newest 30 transitions. Lens cards link to `#applications/{lens}`; "Ever hired" counts history no lens can list, so it has no link. |
 | Applications | `GET /api/applications`, `POST /api/status` | Stage lens, drawer (ADR 0003), bulk change, CSV. |
-| Reports | `GET /api/reports`, `GET /api/reports/:num` | Linked report opens the application drawer; unlinked opens `FullReport`. |
+| Reports | `GET /api/reports`, `GET /api/reports/:num` | `:num` also returns `summary` (core `parseMachineSummary`). Linked report opens the application drawer; unlinked opens `FullReport`. |
 | Drawer intel tab | `GET /api/intel?company=` | Read-only cache view (ADR 0004). |
 | System | `GET /api/system` | Data root, which precedence rung chose it, node version, three file checks. |
 | Profile | `GET /api/profile`, `POST /api/profile/apply` | Four-file view plus Profile apply. |
@@ -80,6 +86,7 @@ reports go in tagged data blocks with closing tags neutralized.
 ## Tests
 
 - `npm test`: `node --test tests/*.test.mjs`. Lib seams plus server routes via `app.request()`.
+  The root `node test-all.mjs` runs it too (section 77) once `web2/node_modules` exists.
 - `npm run typecheck`: `tsc --noEmit`.
 - `npm run smoke`: builds, serves against a temp copy of `tests/fixtures/smoke`,
   and drives every page in Playwright. The coach runs against a local fake

@@ -12,10 +12,12 @@ separate, deliberate "Full report" tab.
 `web2/lib/stage.mjs` → `drawerContent(row, fields)`, which returns a fixed
 model shape with the other stages' fields left `undefined` — a stage cannot
 leak into the card because the React layer only renders what the model carries,
-never decides. Machine Summary fields are parsed client-side from the report
-payload (`web2/lib/reportfields.mjs`) rather than adding a second server-side
-parse layer; the report payload itself is fetched lazily (deciding rows, or the
-full-report tab). Status changes stay on the one write path: the drawer posts to
+never decides. Machine Summary fields come with the report payload, parsed
+server-side by the core's `parseMachineSummary` (`analyze-patterns.mjs`), so the
+project has one YAML parser for them; the report payload itself is fetched
+lazily (deciding rows, or the full-report tab). (Revised: the first version
+parsed client-side with a hand-written line parser, which missed list items
+written at column 0, the shape real reports use.) Status changes stay on the one write path: the drawer posts to
 `/api/status`, which delegates to the core's `set-status.mjs` with `--row N` —
 the explicit tracker-row selector, because a bare `#N` becomes ambiguous once
 row IDs and report links have diverged.

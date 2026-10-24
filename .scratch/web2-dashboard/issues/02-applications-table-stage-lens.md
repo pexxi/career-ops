@@ -10,3 +10,7 @@
 - [x] Lens defaults to Deciding and filters rows via the stage model (`stageOfStatus`); All shows everything
 - [x] Sorting on date/company/score columns; score sentinels (—/N/A) sort last, not as NaN
 - [x] Malformed-file case surfaces as an error state with the parse warning text (missing file ≠ broken file)
+
+## Comments
+
+- 2026-10-24 (review fix, two-axis review): the status filter is now a row of chips (one at a time; clicking the active chip clears it), as the ticket asked, instead of a Select dropdown.

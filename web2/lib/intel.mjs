@@ -1,16 +1,18 @@
 // Company-intel cache (ticket 08, ADR 0004): one JSON snapshot per company under
-// web2/data/company-intel/ (gitignored user data). The app only reads it; the
+// {data root}/data/web2/company-intel/ (gitignored user data). The app only reads it; the
 // capture routines in scripts/ add entries. Every entry carries its provenance
 // (source + url + fetchedAt), and adding never overwrites an earlier entry.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { normalizeCompanyName } from "../../invite-match.mjs";
+import { median } from "../../funnel-velocity.mjs";
+import { replaceUserFile } from "../../tracker-utils.mjs";
+import { web2DataDir } from "./paths.mjs";
 
 export const INTEL_KINDS = ["reviews", "salaries"];
 
-/** WEB2_DATA_DIR overrides web2/data (tests, a data root elsewhere). */
 export function intelDir() {
-  return path.join(process.env.WEB2_DATA_DIR || path.join(import.meta.dirname, "..", "data"), "company-intel");
+  return path.join(web2DataDir(), "company-intel");
 }
 
 /** "OpenAI, Inc." and "openai" → the same file; null for a name with no
@@ -44,16 +46,9 @@ export async function addIntel(dir, company, entry) {
   const snapshot = (await readIntel(dir, company)) ?? { company, sources: [] };
   snapshot.sources.push(entry);
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(`${file}.tmp`, JSON.stringify(snapshot, null, 2) + "\n");
-  await fs.rename(`${file}.tmp`, file);
+  replaceUserFile(file, JSON.stringify(snapshot, null, 2) + "\n");
   return snapshot;
 }
-
-const median = (nums) => {
-  const s = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
 
 /**
  * Open-dataset import (ticket 09): CSV rows (header first) → one `{company, data}`

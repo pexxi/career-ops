@@ -38,9 +38,10 @@ export function rowsInStage(rows, stage) {
  * (ticket 03, ADR 0003). One fixed shape; fields outside the row's CURRENT
  * stage stay undefined, so a stage can never leak into the card: deciding
  * never shows process history, active never shows decision content, closed
- * collapses to one outcome line (no posting link). `fields` is the client-parsed Machine Summary
- * (see lib/reportfields.mjs) — a deciding-lane input, ignored by the other
- * stages. `row.history` is newest-first, per historyFor().
+ * collapses to one outcome line (no posting link). `fields` is the report's
+ * Machine Summary (parsed server-side by the core's parseMachineSummary) plus
+ * its header legitimacy — a deciding-lane input, ignored by the other stages.
+ * `row.history` is newest-first, per historyFor().
  */
 export function drawerContent(row, fields = {}) {
   const stage = stageOfStatus(row.status);
@@ -59,8 +60,9 @@ export function drawerContent(row, fields = {}) {
     Object.assign(model, {
       legitimacy: fields.legitimacy ?? "",
       finalDecision: fields.final_decision ?? "",
-      hardStops: fields.hard_stops ?? [],
-      softGaps: fields.soft_gaps ?? [],
+      // A scalar where YAML should hold a list still renders as one item.
+      hardStops: [].concat(fields.hard_stops ?? []).map(String),
+      softGaps: [].concat(fields.soft_gaps ?? []).map(String),
     });
   } else if (stage === "active") {
     Object.assign(model, { history: row.history ?? [], notes: row.notes ?? "" });

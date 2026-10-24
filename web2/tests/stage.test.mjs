@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { stageOfStatus, rowsInStage, drawerContent, STAGE_ORDER, DEFAULT_STAGE, CANONICAL_STATES } from "../lib/stage.mjs";
 import { loadCanonicalStates } from "../../tracker-utils.mjs";
+import { funnelStageRank } from "../../funnel-stages.mjs";
+import { FUNNEL } from "../lib/overview.mjs";
 
 // templates/states.yml is the source of truth; the stage map mirrors it.
 const ALL_STATES = loadCanonicalStates(
@@ -16,6 +18,13 @@ const ALL_STATES = loadCanonicalStates(
 
 test("the stage map mirrors templates/states.yml exactly (parity)", () => {
   assert.deepEqual([...CANONICAL_STATES].sort(), [...ALL_STATES].sort());
+});
+
+test("the Overview funnel is canonical states in the core's rank order (parity)", () => {
+  for (const stage of FUNNEL) assert.ok(ALL_STATES.includes(stage), `${stage} is not in states.yml`);
+  const ranks = FUNNEL.map((stage) => funnelStageRank(stage));
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+  assert.equal(new Set(ranks).size, FUNNEL.length);
 });
 
 test("Offer is a live decision: active, not closed", () => {

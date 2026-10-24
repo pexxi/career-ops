@@ -12,22 +12,36 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * @returns {string} Absolute path to the data root
  */
 export function getCareerOpsRoot() {
-  const env = process.env.CAREER_OPS_ROOT?.trim() || process.env.CAREER_OPS_DATA_DIR?.trim();
-  if (env) {
-    return resolve(__dirname, env);
+  return resolveCareerOpsRoot().root;
+}
+
+/**
+ * Which rung of getCareerOpsRoot()'s precedence produced the data root, as a
+ * display label ("env CAREER_OPS_ROOT", "marker .career-ops-data", ...).
+ *
+ * @returns {string}
+ */
+export function getCareerOpsRootSource() {
+  return resolveCareerOpsRoot().source;
+}
+
+function resolveCareerOpsRoot() {
+  for (const name of ['CAREER_OPS_ROOT', 'CAREER_OPS_DATA_DIR']) {
+    const env = process.env[name]?.trim();
+    if (env) return { root: resolve(__dirname, env), source: `env ${name}` };
   }
   const markerFile = join(__dirname, '.career-ops-data');
   if (existsSync(markerFile)) {
     try {
       const content = readFileSync(markerFile, 'utf-8').trim();
       if (content) {
-        return resolve(__dirname, content);
+        return { root: resolve(__dirname, content), source: 'marker .career-ops-data' };
       }
     } catch {
       // ignore read errors
     }
   }
-  return __dirname;
+  return { root: __dirname, source: 'repo default' };
 }
 
 /**

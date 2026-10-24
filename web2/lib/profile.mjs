@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { getProfilePath } from "../../path-resolver.mjs";
 import { loadYaml } from "../../lib/yaml-document.mjs";
+import { replaceUserFile } from "../../tracker-utils.mjs";
 import { dataRoot } from "./paths.mjs";
 
 /** The closed set Profile apply may write — keyed by name, never by a client path. */
@@ -110,8 +111,8 @@ export async function applyProfilePatch(name, patch, { dryRun = false } = {}) {
   }
   if (!dryRun) {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(`${filePath}.tmp`, after);
-    await fs.rename(`${filePath}.tmp`, filePath);
+    // The core's user-file writer: atomic, keeps a symlinked cv.md a symlink, keeps permissions.
+    replaceUserFile(filePath, after);
   }
   return { name, path: filePath, before, after, written: !dryRun };
 }

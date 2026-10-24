@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { AppShell, Burger, Group, NavLink, Text, ActionIcon, useMantineColorScheme, ScrollArea } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconSun, IconMoon, IconRefresh, IconGauge, IconTable, IconFileText, IconShieldCheck, IconUser } from "@tabler/icons-react";
+import { OverviewPage } from "./overview";
+import { ApplicationsPage } from "./applications";
+import { ReportsPage } from "./reports";
+import { SystemPage } from "./system";
+import { ProfilePage } from "./profile";
 
 const PAGES = [
   { id: "overview", label: "Overview", icon: IconGauge },
@@ -42,7 +47,7 @@ export function App() {
   return (
     <AppShell
       header={{ height: 56 }}
-      navbar={{ width: 220, breakpoint: "sm" }}
+      navbar={{ width: 220, breakpoint: "sm", collapsed: { mobile: !navOpen } }}
       footer={{ height: 30 }}
       padding="md"
     >
@@ -100,7 +105,3 @@ export function App() {
     </AppShell>
   );
 }
-
-// Lazy page references resolved in this single-file shell to avoid a router dep.
-import { OverviewPage, ApplicationsPage, ReportsPage, SystemPage } from "./pages";
-import { ProfilePage } from "./profile";

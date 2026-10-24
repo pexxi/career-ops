@@ -1,14 +1,15 @@
 // Lightweight reader for reports/*.md — header facts + title only; the full
-// markdown is streamed to the client on demand.
+// markdown and its Machine Summary (parsed by the core) are sent on demand.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parseScoreCell } from "./tracker.mjs";
+import { parseMachineSummary } from "../../analyze-patterns.mjs";
 
 const FIELD_RE = (name) => new RegExp(`^\\*\\*${name}:\\*\\*\\s*(.*)$`);
 
 export function parseReportMeta(md) {
   const lines = md.split(/\r?\n/);
-  const meta = { title: "", date: "", company: "", role: "", url: "", score: null, legitimacy: "", archetype: "" };
+  const meta = { title: "", date: "", company: "", role: "", url: "", score: null, legitimacy: "" };
   for (const line of lines) {
     if (line.startsWith("## ")) break; // header facts end at the first section
     if (!meta.title && /^#\s+/.test(line)) {
@@ -26,7 +27,6 @@ export function parseReportMeta(md) {
       ["url", FIELD_RE("URL")],
       ["score", FIELD_RE("Score")],
       ["legitimacy", FIELD_RE("Legitimacy")],
-      ["archetype", FIELD_RE("Archetype")],
     ]) {
       const m = re.exec(line.trim());
       if (m && !meta[field]) {
@@ -55,7 +55,7 @@ export async function readReport(reportsDirPath, num) {
     throw err;
   }
   const md = await fs.readFile(path.join(reportsDirPath, file), "utf8");
-  return { file, markdown: md, ...parseReportMeta(md) };
+  return { file, markdown: md, ...parseReportMeta(md), summary: parseMachineSummary(md) ?? {} };
 }
 
 /** Every `NNN-*.md` in the reports dir → header facts (no body), newest number first. */
